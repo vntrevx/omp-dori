@@ -21,11 +21,13 @@ const NO_SLACK_TOKEN = "DORI_SLACK_TOKEN is not set (nor DORI_SLACK_TOKEN_FILE)"
 const send: Command = async ({ key, need, opt, values, config }) => {
   const platform = key ?? die("send needs slack, telegram or discord");
   const to = need("to");
-  const text = need("text");
+  const text = opt("text");
   const thread = opt("thread");
   const edit = opt("edit");
   const token = (name: string) => process.env[name] ?? die(`${name} is not set`);
   if (platform === "slack") {
+    if (opt("file") !== undefined) die("--file is not supported for slack");
+    const t = text ?? die("--text is required");
     const slack = new Slack(
       fetchHttp,
       realClock,
@@ -33,8 +35,8 @@ const send: Command = async ({ key, need, opt, values, config }) => {
       undefined,
       new ThreadLedger(`${config.stateDir}/slack-threads.json`),
     );
-    if (edit) await slack.edit(to, edit, text);
-    else console.log(`SENT ${(await slack.post(to, text, thread)).ts}`);
+    if (edit) await slack.edit(to, edit, t);
+    else console.log(`SENT ${(await slack.post(to, t, thread)).ts}`);
   } else if (platform === "telegram") {
     // Number("telegram:-1001/42") is NaN, and the Telegram target drops a falsy threadId, so a bad --thread
     // would post to the group's General topic. A flag given empty (--thread "$UNSET") is refused too: no topic
@@ -50,12 +52,21 @@ const send: Command = async ({ key, need, opt, values, config }) => {
     const target = { chatId: to, ...(threadId !== undefined ? { threadId } : {}) };
     const messageId = id("edit", "message");
     const tg = new Telegram(fetchHttp, realClock, token("DORI_TELEGRAM_TOKEN"));
-    if (messageId !== undefined) await tg.edit(target, messageId, text);
-    else console.log(`SENT ${await tg.send(target, text)}`);
+    const filePath = opt("file");
+    if (filePath !== undefined && text !== undefined) die("--file and --text are mutually exclusive");
+    if (filePath !== undefined) {
+      console.log(`SENT ${await tg.sendFile(target, filePath, opt("caption"))}`);
+    } else {
+      const t = text ?? die("--text or --file is required for telegram");
+      if (messageId !== undefined) await tg.edit(target, messageId, t);
+      else console.log(`SENT ${await tg.send(target, t)}`);
+    }
   } else if (platform === "discord") {
+    if (opt("file") !== undefined) die("--file is not supported for discord");
+    const t = text ?? die("--text is required");
     const dc = new Discord(fetchHttp, realClock, token("DORI_DISCORD_TOKEN"));
-    if (edit) await dc.edit(to, edit, text);
-    else console.log(`SENT ${await dc.send(thread ?? to, text)}`);
+    if (edit) await dc.edit(to, edit, t);
+    else console.log(`SENT ${await dc.send(thread ?? to, t)}`);
   } else die(`unknown platform ${platform}`);
 };
 
@@ -165,10 +176,24 @@ const inbound: Command = async ({ key, loopMinutes, config }) => {
   });
 };
 
+const file: Command = async ({ key, need, positionals }) => {
+  const sub = key ?? die("file needs get");
+  if (sub !== "get") die(`file ${sub} is not supported`);
+  const platform = positionals[1] ?? die("file get needs telegram");
+  if (platform !== "telegram") die(`file get ${platform} is not supported`);
+  const token = process.env["DORI_TELEGRAM_TOKEN"] ?? die("DORI_TELEGRAM_TOKEN is not set");
+  const fileId = need("file-id");
+  const outPath = need("out");
+  const tg = new Telegram(fetchHttp, realClock, token);
+  const bytes = await tg.downloadToPath(fileId, outPath);
+  console.log(`GOT ${outPath} ${bytes}`);
+};
+
 export const messengerCommands: Readonly<Record<string, Command>> = {
   send,
   presence,
   inbound,
+  file,
   transcribe: async ({ key, config }) => {
     console.log(await transcribe(run, config.hooks.transcribe, key ?? die("transcribe needs an audio file path")));
   },

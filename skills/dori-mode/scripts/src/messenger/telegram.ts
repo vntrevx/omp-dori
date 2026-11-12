@@ -1,3 +1,5 @@
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 import type { Clock } from "../run.ts";
 import { guardText, type Http, MessengerError, withBackoff } from "./http.ts";
 
@@ -96,6 +98,61 @@ export class Telegram {
 
   async reopenTopic(chatId: number | string, threadId: number): Promise<void> {
     await this.call("reopenForumTopic", { chat_id: chatId, message_thread_id: threadId });
+  }
+
+  /** Download a Telegram file by file_id to outPath. Returns bytes written.
+   * Refuses if the API reports file_size > 20 MB. */
+  async downloadToPath(fileId: string, outPath: string): Promise<number> {
+    const MAX = 20 * 1024 * 1024;
+    const info = await this.call<{ file_path: string; file_size?: number }>("getFile", { file_id: fileId });
+    if (info.file_size !== undefined && info.file_size > MAX)
+      throw new MessengerError(`file ${fileId} is ${info.file_size} bytes, over the 20 MB getFile limit`, 400);
+    const url = `${this.base}/file/bot${this.botToken}/${info.file_path}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new MessengerError("telegram file download failed", res.status);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    writeFileSync(outPath, bytes);
+    return bytes.byteLength;
+  }
+
+  private static readonly photoExts: Record<string, true> = {
+    ".jpg": true,
+    ".jpeg": true,
+    ".png": true,
+    ".webp": true,
+  };
+
+  /** Send a local file; uses sendPhoto for jpg/jpeg/png/webp, sendDocument otherwise.
+   * Refuses files larger than 50 MB before reading them. */
+  async sendFile(t: TgTarget, filePath: string, caption?: string): Promise<number> {
+    const MAX = 50 * 1024 * 1024;
+    const size = statSync(filePath).size;
+    if (size > MAX)
+      throw new MessengerError(`${basename(filePath)} is ${size} bytes, over the 50 MB upload limit`, 400);
+    const ext = extname(filePath).toLowerCase();
+    const method = ext in Telegram.photoExts ? "sendPhoto" : "sendDocument";
+    const field = method === "sendPhoto" ? "photo" : "document";
+    const form = new FormData();
+    form.append("chat_id", String(t.chatId));
+    if (t.threadId !== undefined) form.append("message_thread_id", String(t.threadId));
+    if (caption !== undefined) form.append("caption", caption);
+    form.append(field, new Blob([readFileSync(filePath)]), basename(filePath));
+    const res = await withBackoff(
+      this.http,
+      this.clock,
+      { method: "POST", url: `${this.base}/bot${this.botToken}/${method}`, body: form },
+      undefined,
+      retryAfter,
+    );
+    const body = JSON.parse(res.body || "{}") as {
+      ok?: boolean;
+      result?: { message_id: number };
+      description?: string;
+      error_code?: number;
+    };
+    if (!body.ok)
+      throw new MessengerError(`telegram ${method}: ${body.description ?? res.status}`, body.error_code ?? res.status);
+    return body.result!.message_id;
   }
 }
 

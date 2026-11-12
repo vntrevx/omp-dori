@@ -53,6 +53,10 @@ const USAGE = `dori <command> [options]
   can-launch                           exit 0 if the host has room for a new lane, else print why and exit 4
   send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]
                                        post or edit a message (tokens from DORI_SLACK_TOKEN or the file DORI_SLACK_TOKEN_FILE names, DORI_TELEGRAM_TOKEN, DORI_DISCORD_TOKEN)
+  send telegram --to CHAT --file PATH [--caption TEXT] [--thread ID]
+                                       send a file (sendPhoto for jpg/jpeg/png/webp, sendDocument otherwise); --file and --text are mutually exclusive
+  file get telegram --file-id ID --out PATH
+                                       download a Telegram file by file_id to PATH; prints GOT <path> <bytes>
   presence <slack|discord>             keep the account shown as online until stopped
   transcribe <audio-file>              run hooks.transcribe and print the text
   inbound slack|telegram [--loop MIN]  print INBOUND lines: Slack unread thread replies / Telegram owner DMs, edits and media + configured topic
@@ -102,6 +106,10 @@ const flags = parseArgs({
     global: { type: "boolean" },
     source: { type: "string" },
     open: { type: "boolean" },
+    file: { type: "string" },
+    "file-id": { type: "string" },
+    out: { type: "string" },
+    caption: { type: "string" },
   },
 });
 

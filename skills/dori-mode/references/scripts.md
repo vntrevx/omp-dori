@@ -160,6 +160,12 @@ Prints `CAN_LAUNCH` and exits 0 when the host has room for another lane. Otherwi
 ### `dori send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]`
 Posts a message, or edits one with `--edit`. Tokens come from `DORI_SLACK_TOKEN`, or when that is unset or empty from the file `DORI_SLACK_TOKEN_FILE` names (plus `DORI_SLACK_COOKIE` for a user token). The file must be a regular file you own and owner-only (`chmod 600`), checked and read through one open descriptor; a file open to group or others, owned by someone else, not a regular file (a FIFO never blocks the read), missing or empty is refused. Windows has no mode bits or uid to check, so there the file's ACL is the owner's to set, and `dori boot` prints `SLACK token-file: the token file's NTFS ACL is not checked on Windows; ...` as a reminder. Other tokens come from `DORI_TELEGRAM_TOKEN` or `DORI_DISCORD_TOKEN`. Text containing `$(` is refused, since it can only come from a shell string. Rate limits are retried with the server's wait time; other errors fail at once.
 
+### `dori send telegram --to CHAT --file PATH [--caption TEXT] [--thread ID]`
+Sends a local file to a Telegram chat. Uses `sendPhoto` for `.jpg`, `.jpeg`, `.png`, `.webp`; `sendDocument` for all other extensions. Prints `SENT <message_id>`. `--file` and `--text` are mutually exclusive: providing both is refused. Files larger than 50 MB are refused before reading. `--file` is not supported for Slack or Discord.
+
+### `dori file get telegram --file-id ID --out PATH`
+Downloads a Telegram file to PATH. Calls `getFile` for the server path, then downloads `https://api.telegram.org/file/bot<token>/<file_path>` to PATH. Prints `GOT <path> <bytes>`. The `file_id` appears on `dori inbound telegram` lines as `file=<kind>:<file_id>`. Files reported by the API as larger than 20 MB are refused before the download begins.
+
 ### `dori presence <slack|discord>`
 Keeps the account shown as online until stopped.
 - **Discord:** the bot connects to the gateway and identifies as online.
