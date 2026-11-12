@@ -1,7 +1,7 @@
 /** dori report, lesson, worklog, checkpoint and checkpoints: the durable journals. */
 import { CheckpointError, Checkpoints } from "./checkpoints.ts";
 import { type Cli, type Command, die } from "./cli-context.ts";
-import { isLessonOutcome, LessonError, Lessons } from "./lessons.ts";
+import { GLOBAL_LESSON_CAP, isLessonOutcome, LessonError, Lessons } from "./lessons.ts";
 import { isReportKind, ReportError, Reports, reportLine } from "./reports.ts";
 import { realClock, runtimesOf } from "./run.ts";
 import { Worklog, WorklogError } from "./worklog.ts";
@@ -30,11 +30,19 @@ const lessonAdd = async (
     if (opt("cwd") !== undefined) die("a --global lesson has no --cwd");
     const caller = await paneLane();
     if (caller) die(`a --global lesson is the lead's; this pane is lane ${caller.key}`);
-    console.log(
-      JSON.stringify(
-        lessons.add({ lane: "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now()),
-      ),
+    const added = lessons.add(
+      { lane: "lead", scope: "global", rule: need("rule"), evidence: need("evidence") },
+      realClock.now(),
     );
+    console.log(JSON.stringify(added));
+    const allGlobal = lessons
+      .read()
+      .lessons.filter((l) => l.scope === "global" && (l.outcome === "pending" || l.outcome === "helped"));
+    const dropped = allGlobal.length - GLOBAL_LESSON_CAP;
+    if (dropped > 0)
+      console.error(
+        `LESSON_CAP_WARNING ${dropped} global lesson${dropped === 1 ? "" : "s"} left out of brief (cap ${GLOBAL_LESSON_CAP}); retire old rules with: lesson mark <id> --outcome encoded`,
+      );
     return;
   }
   const target =

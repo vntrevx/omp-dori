@@ -151,9 +151,17 @@ export class Lessons {
   forRepo(cwd: string): LessonRead {
     const { lessons, problems } = this.read(cwd);
     const current = lessons.filter((lesson) => lesson.outcome === "pending" || lesson.outcome === "helped");
-    const global = current.filter((lesson) => lesson.scope === "global").slice(0, GLOBAL_LESSON_CAP);
+    const allGlobal = current.filter((lesson) => lesson.scope === "global");
+    const global = allGlobal.slice(0, GLOBAL_LESSON_CAP);
+    const dropped = allGlobal.length - global.length;
+    const capProblems =
+      dropped > 0
+        ? [
+            `${dropped} global lesson${dropped === 1 ? "" : "s"} left out of brief (cap ${GLOBAL_LESSON_CAP}); retire old rules with: lesson mark <id> --outcome encoded`,
+          ]
+        : [];
     const repo = current.filter((lesson) => lesson.scope !== "global").slice(0, REPO_LESSON_CAP);
-    return { lessons: [...global, ...repo], problems };
+    return { lessons: [...global, ...repo], problems: [...problems, ...capProblems] };
   }
 
   private append(lesson: Lesson): void {
