@@ -51,7 +51,7 @@ const USAGE = `dori <command> [options]
   guard [--loop MIN]                   host load, memory, disk and pane-count alerts
   heavy <label> -- <command ...>       run a heavy command when a slot is free and load is low
   can-launch                           exit 0 if the host has room for a new lane, else print why and exit 4
-  send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]
+  send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID] [--html]
                                        post or edit a message (tokens from DORI_SLACK_TOKEN or the file DORI_SLACK_TOKEN_FILE names, DORI_TELEGRAM_TOKEN, DORI_DISCORD_TOKEN)
   presence <slack|discord>             keep the account shown as online until stopped
   transcribe <audio-file>              run hooks.transcribe and print the text
@@ -102,6 +102,7 @@ const flags = parseArgs({
     global: { type: "boolean" },
     source: { type: "string" },
     open: { type: "boolean" },
+    html: { type: "boolean" },
   },
 });
 

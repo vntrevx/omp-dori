@@ -88,3 +88,84 @@ test("send telegram refuses a --thread or --edit that is not a message id before
     state.done();
   }
 }, 120_000);
+
+test("send telegram --html adds parse_mode HTML; --html is refused for other platforms", async () => {
+  const state = withState();
+  try {
+    const config = join(state.dir, "config.json");
+    const log = join(state.dir, "fetch.jsonl");
+    writeFileSync(config, JSON.stringify({ stateDir: state.dir, defaultCwd: state.dir, hooks: {} }));
+    const send = async (...flags: string[]) => {
+      rmSync(log, { force: true });
+      const r = await run(
+        [
+          "env",
+          `DORI_CONFIG=${config}`,
+          `DORI_STATE_DIR=${state.dir}`,
+          "DORI_TELEGRAM_TOKEN=tok",
+          `DORI_TEST_FETCH_LOG=${log}`,
+          process.execPath,
+          "--preload",
+          recorder,
+          cli,
+          "send",
+          "telegram",
+          "--to",
+          "-1001",
+          "--text",
+          "hi",
+          ...flags,
+        ],
+        { timeoutMs: 20_000 },
+      );
+      const requests = existsSync(log)
+        ? readFileSync(log, "utf8")
+            .trim()
+            .split("\n")
+            .map((l) => JSON.parse(l) as { url: string; body: Record<string, unknown> })
+        : [];
+      return { ...r, requests };
+    };
+    // --html adds parse_mode: HTML to sendMessage
+    const withHtml = await send("--html");
+    expect([withHtml.code, withHtml.out]).toEqual([0, "SENT 99"]);
+    expect(withHtml.requests.map((q) => [q.url.split("/").at(-1), q.body["parse_mode"]])).toEqual([
+      ["sendMessage", "HTML"],
+    ]);
+    // without --html, parse_mode is absent
+    const noHtml = await send();
+    expect(noHtml.requests.map((q) => ["parse_mode" in q.body])).toEqual([[false]]);
+    // --html adds parse_mode: HTML to editMessageText
+    const editHtml = await send("--edit", "5", "--html");
+    expect(editHtml.requests.map((q) => [q.url.split("/").at(-1), q.body["parse_mode"]])).toEqual([
+      ["editMessageText", "HTML"],
+    ]);
+    // --html refused for slack and discord (no network calls needed)
+    for (const platform of ["slack", "discord"] as const) {
+      const r = await run(
+        [
+          "env",
+          `DORI_CONFIG=${config}`,
+          `DORI_STATE_DIR=${state.dir}`,
+          process.execPath,
+          cli,
+          "send",
+          platform,
+          "--to",
+          "C1",
+          "--text",
+          "hi",
+          "--html",
+        ],
+        { timeoutMs: 20_000 },
+      );
+      expect({ platform, code: r.code, err: r.err }).toEqual({
+        platform,
+        code: 1,
+        err: `--html is only supported for telegram, not ${platform}`,
+      });
+    }
+  } finally {
+    state.done();
+  }
+}, 120_000);

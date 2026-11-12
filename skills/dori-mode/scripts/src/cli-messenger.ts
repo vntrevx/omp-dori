@@ -25,6 +25,8 @@ const send: Command = async ({ key, need, opt, values, config }) => {
   const thread = opt("thread");
   const edit = opt("edit");
   const token = (name: string) => process.env[name] ?? die(`${name} is not set`);
+  const html = Boolean(values["html"]);
+  if (html && platform !== "telegram") die(`--html is only supported for telegram, not ${platform}`);
   if (platform === "slack") {
     const slack = new Slack(
       fetchHttp,
@@ -50,8 +52,8 @@ const send: Command = async ({ key, need, opt, values, config }) => {
     const target = { chatId: to, ...(threadId !== undefined ? { threadId } : {}) };
     const messageId = id("edit", "message");
     const tg = new Telegram(fetchHttp, realClock, token("DORI_TELEGRAM_TOKEN"));
-    if (messageId !== undefined) await tg.edit(target, messageId, text);
-    else console.log(`SENT ${await tg.send(target, text)}`);
+    if (messageId !== undefined) await tg.edit(target, messageId, text, html);
+    else console.log(`SENT ${await tg.send(target, text, html)}`);
   } else if (platform === "discord") {
     const dc = new Discord(fetchHttp, realClock, token("DORI_DISCORD_TOKEN"));
     if (edit) await dc.edit(to, edit, text);
