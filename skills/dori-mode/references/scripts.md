@@ -157,6 +157,22 @@ Prints `HOST_GUARD ALERT <reasons>` when load, free memory, free disk or the pan
 ### `dori can-launch`
 Prints `CAN_LAUNCH` and exits 0 when the host has room for another lane. Otherwise it prints `HOLD <reasons>` and exits 4. The reasons come from the guard's memory, disk and pane-count thresholds. CPU load alone never holds a launch, because it moves too fast to plan around.
 
+
+### `dori usage omp --session ID`
+Reads the OMP session file for `ID` from `config.sessionsDir` (default `~/.omp/agent/sessions`). Looks for `*_<ID>.jsonl` under any subdirectory. Sums `totalTokens` and `cost.total` from:
+- `type=message` entries where `message.role` is `"assistant"` → `message.usage.totalTokens` and `message.usage.cost.total`
+- `type=model_usage` entries → `usage.totalTokens` and `usage.cost.total`
+
+Prints one JSON line: `{"tokens":N,"costUsd":X}`. A session not found or unreadable file exits nonzero (supervision treats unknown usage as unknown, never zero). A torn last line (incomplete write from a crash) is skipped; other lines are still summed.
+
+Wire it as the supervision usage reader:
+```json
+"supervision": {
+  "usageArgv": ["dori", "usage", "omp", "--session", "{session}"]
+}
+```
+The `{session}` placeholder is filled with the lane's OMP session id. This makes `supervision.usageArgv` report live token and cost totals for OMP lane ceilings and the `COST` line on close.
+
 ### `dori send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]`
 Posts a message, or edits one with `--edit`. Tokens come from `DORI_SLACK_TOKEN`, or when that is unset or empty from the file `DORI_SLACK_TOKEN_FILE` names (plus `DORI_SLACK_COOKIE` for a user token). The file must be a regular file you own and owner-only (`chmod 600`), checked and read through one open descriptor; a file open to group or others, owned by someone else, not a regular file (a FIFO never blocks the read), missing or empty is refused. Windows has no mode bits or uid to check, so there the file's ACL is the owner's to set, and `dori boot` prints `SLACK token-file: the token file's NTFS ACL is not checked on Windows; ...` as a reminder. Other tokens come from `DORI_TELEGRAM_TOKEN` or `DORI_DISCORD_TOKEN`. Text containing `$(` is refused, since it can only come from a shell string. Rate limits are retried with the server's wait time; other errors fail at once.
 

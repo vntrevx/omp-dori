@@ -28,7 +28,8 @@
     "defaults": { "wallMinutes": null, "tokens": null, "costUsd": null },
     "lanes": {},
     "activityPaths": [],
-    "gitActivity": true
+    "gitActivity": true,
+    "usageArgv": ["dori", "usage", "omp", "--session", "{session}"]
   },
   "heavySlots": 1,
   "heavyMaxLoad": 80,
