@@ -11,6 +11,9 @@ export type OmpUsage = { readonly tokens: number; readonly costUsd: number };
  *   - type=model_usage → usage.totalTokens + usage.cost.total
  * Skips any line that cannot be parsed (including a torn last line from a mid-write crash).
  */
+/** A usage field counts only when it is a finite, non-negative number; anything else adds nothing. */
+const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0);
+
 export const sumUsageFromJsonl = (content: string): OmpUsage => {
   let tokens = 0;
   let costUsd = 0;
@@ -32,20 +35,16 @@ export const sumUsageFromJsonl = (content: string): OmpUsage => {
       const usage = m["usage"];
       if (typeof usage !== "object" || usage === null) continue;
       const u = usage as Record<string, unknown>;
-      tokens += (u["totalTokens"] as number | undefined) ?? 0;
+      tokens += num(u["totalTokens"]);
       const cost = u["cost"];
-      if (typeof cost === "object" && cost !== null) {
-        costUsd += ((cost as Record<string, unknown>)["total"] as number | undefined) ?? 0;
-      }
+      if (typeof cost === "object" && cost !== null) costUsd += num((cost as Record<string, unknown>)["total"]);
     } else if (r["type"] === "model_usage") {
       const usage = r["usage"];
       if (typeof usage !== "object" || usage === null) continue;
       const u = usage as Record<string, unknown>;
-      tokens += (u["totalTokens"] as number | undefined) ?? 0;
+      tokens += num(u["totalTokens"]);
       const cost = u["cost"];
-      if (typeof cost === "object" && cost !== null) {
-        costUsd += ((cost as Record<string, unknown>)["total"] as number | undefined) ?? 0;
-      }
+      if (typeof cost === "object" && cost !== null) costUsd += num((cost as Record<string, unknown>)["total"]);
     }
   }
   return { tokens, costUsd };
@@ -56,6 +55,8 @@ export const sumUsageFromJsonl = (content: string): OmpUsage => {
  * `<timestamp>_<sessionId>.jsonl` (may be nested under a cwd-keyed subdirectory).
  */
 export const findSessionFile = async (sessionsDir: string, sessionId: string): Promise<string | undefined> => {
+  // The id becomes part of a glob: refuse anything but an OMP session id so "*" cannot match another session.
+  if (!/^[0-9A-Za-z-]+$/.test(sessionId)) return undefined;
   for await (const rel of new Glob(`**/*_${sessionId}.jsonl`).scan({ cwd: sessionsDir, onlyFiles: true })) {
     return join(sessionsDir, rel);
   }

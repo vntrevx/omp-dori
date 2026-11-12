@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { sumUsageFromJsonl } from "../src/omp-usage.ts";
+import { findSessionFile, sumUsageFromJsonl } from "../src/omp-usage.ts";
 import { run } from "../src/run.ts";
 import { withState } from "./fakes.ts";
 
@@ -115,3 +115,15 @@ test("dori usage omp --session exits nonzero for unknown session", async () => {
     state.done();
   }
 }, 30_000);
+
+test("non-numeric usage fields add nothing", () => {
+  const line = JSON.stringify({
+    type: "message",
+    message: { role: "assistant", usage: { totalTokens: "100", cost: { total: "1.5" } } },
+  });
+  expect(sumUsageFromJsonl(line)).toEqual({ tokens: 0, costUsd: 0 });
+});
+
+test("a session id with glob characters matches nothing", async () => {
+  expect(await findSessionFile("/nonexistent", "*")).toBeUndefined();
+});
