@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { EVAL_BATCHING, isSol, withEvalBatching } from "../eval-batching";
 import { load, useConfig } from "./fake-pi";
 
+const REAL_ULW = join(import.meta.dir, "../../ref/omp-ulw/index.ts");
 const SOL = { id: "gpt-6.1-sol", name: "GPT-6.1 Sol" };
 const base = { type: "before_agent_start", prompt: "fix it", systemPrompt: ["base prompt"] };
 
@@ -47,6 +49,27 @@ describe("eval batching", () => {
     for (const id of ["gpt-6-sol", "gpt-6.1-solar", "gpt-6.1-terra", "gpt-16.1-sol", "consol-gpt-6.1"])
       expect(isSol({ id })).toBe(false);
     expect(isSol(undefined)).toBe(false);
+  });
+
+  test.skipIf(!existsSync(REAL_ULW))("the block survives the real omp-ulw preset replacement", async () => {
+    useConfig(REAL_ULW);
+    const pi = await load({
+      session: { id: "s-real", entries: [] },
+      flags: { "dori-role": "lane" },
+      model: { ...SOL, provider: "openai-codex" },
+      active: ["read", "bash", "eval"],
+    });
+    await pi.emit("session_start");
+    // omp's runner feeds each before_agent_start handler the prompt the previous one returned.
+    let systemPrompt = [`intro\n§ Role\nhost role\n§ Runtime\nrt\n§ Tool Policy\npolicy\n§ Workflow\nwf`];
+    for (const handler of pi.handlers.get("before_agent_start") ?? []) {
+      const result = await handler({ ...base, systemPrompt }, pi.ctx());
+      if (result && typeof result === "object" && "systemPrompt" in result)
+        systemPrompt = result.systemPrompt as string[];
+    }
+    expect(systemPrompt[0]).toContain("<omp-model-preset>");
+    expect(systemPrompt[0]).not.toContain("host role");
+    expect(systemPrompt.at(-1)).toBe(EVAL_BATCHING);
   });
 
   test("a prompt that already carries the block, or is not a block list, is left alone", () => {
