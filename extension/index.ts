@@ -11,6 +11,7 @@
  *   approvals of the Dori/lane session running in HERDR_PANE_ID or HC_TERMINAL_ID.
  * - Lanes without a goal get omp's `goal` tool so the agent can create its goal from the lane brief.
  * - The Dori session gets the `monitor` tool (monitor.ts).
+ * - Role sessions on GPT-6.1 Sol batch independent lookups through one `eval` cell (eval-batching.ts).
  */
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,6 +26,7 @@ import {
 } from "../skills/dori-mode/scripts/src/lane-state";
 import { bootstrapMonitors, MONITOR_BOOTSTRAP_FLAG, recordedIntake } from "./bootstrap.ts";
 import { RuntimeHealthWriter } from "./deployment-health.ts";
+import { type PromptModel, withEvalBatching } from "./eval-batching.ts";
 import { MONITOR_DESCRIPTION, Monitors } from "./monitor";
 
 interface SessionEntry {
@@ -36,6 +38,7 @@ interface SessionEntry {
 export interface DoriContext {
   cwd: string;
   agent: { kind: "main" | "sub"; id: string; parentId?: string };
+  model?: PromptModel;
   sessionManager: { getSessionId(): string; getSessionFile(): string | undefined; getBranch(): SessionEntry[] };
   ui: { notify(message: string, type?: "info" | "warning" | "error"): void };
 }
@@ -439,6 +442,13 @@ export default async function ompDori(pi: DoriApi): Promise<void> {
     if (ctx.agent.kind !== "main" || !role) return;
     agentStatus = "idle";
     savePane(ctx);
+  });
+
+  // Registered before omp-ulw, whose handler chains from this prompt and keeps blocks after its own.
+  pi.on("before_agent_start", (event, ctx) => {
+    if (!role || typeof event !== "object" || event === null || !("systemPrompt" in event)) return;
+    const systemPrompt = withEvalBatching(event.systemPrompt, ctx.model, pi.getActiveTools());
+    return systemPrompt && { systemPrompt };
   });
 
   const z = pi.zod;
