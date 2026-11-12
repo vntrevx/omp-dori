@@ -88,3 +88,75 @@ test("send telegram refuses a --thread or --edit that is not a message id before
     state.done();
   }
 }, 120_000);
+
+test("react telegram calls setMessageReaction with the given emoji; non-telegram and bad ids are refused", async () => {
+  const state = withState();
+  try {
+    const config = join(state.dir, "config.json");
+    const log = join(state.dir, "fetch.jsonl");
+    writeFileSync(config, JSON.stringify({ stateDir: state.dir, defaultCwd: state.dir, hooks: {} }));
+    const invoke = async (...args: string[]) => {
+      rmSync(log, { force: true });
+      const r = await run(
+        [
+          "env",
+          `DORI_CONFIG=${config}`,
+          `DORI_STATE_DIR=${state.dir}`,
+          "DORI_TELEGRAM_TOKEN=tok",
+          `DORI_TEST_FETCH_LOG=${log}`,
+          process.execPath,
+          "--preload",
+          recorder,
+          cli,
+          ...args,
+        ],
+        { timeoutMs: 20_000 },
+      );
+      const requests = existsSync(log)
+        ? readFileSync(log, "utf8")
+            .trim()
+            .split("\n")
+            .map((l) => JSON.parse(l) as { url: string; body: Record<string, unknown> })
+        : [];
+      return { ...r, requests };
+    };
+    // Default emoji 👀 reaches setMessageReaction; prints REACTED <id>
+    const eyes = await invoke("react", "telegram", "--to", "-1001", "--message", "42");
+    expect([eyes.code, eyes.out]).toEqual([0, "REACTED 42"]);
+    expect(eyes.requests.map((q) => [q.url.split("/").at(-1), q.body["message_id"], q.body["reaction"]])).toEqual([
+      ["setMessageReaction", 42, [{ type: "emoji", emoji: "👀" }]],
+    ]);
+    // Custom emoji
+    const custom = await invoke("react", "telegram", "--to", "-1001", "--message", "7", "--emoji", "🔥");
+    expect(custom.requests.map((q) => q.body["reaction"])).toEqual([[{ type: "emoji", emoji: "🔥" }]]);
+    // Invalid message id is refused before any HTTP call
+    for (const bad of ["abc", "0", "-5", ""]) {
+      const r = await invoke("react", "telegram", "--to", "-1001", "--message", bad);
+      expect({ bad, code: r.code, requests: r.requests }).toEqual({
+        bad,
+        code: 1,
+        requests: [],
+      });
+    }
+    // Non-telegram platform is refused
+    const r = await run(
+      [
+        "env",
+        `DORI_CONFIG=${config}`,
+        `DORI_STATE_DIR=${state.dir}`,
+        process.execPath,
+        cli,
+        "react",
+        "slack",
+        "--to",
+        "C1",
+        "--message",
+        "7",
+      ],
+      { timeoutMs: 20_000 },
+    );
+    expect([r.code, r.err]).toEqual([1, "react is only supported for telegram, not slack"]);
+  } finally {
+    state.done();
+  }
+}, 120_000);

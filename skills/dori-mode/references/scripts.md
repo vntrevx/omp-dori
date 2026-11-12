@@ -160,6 +160,9 @@ Prints `CAN_LAUNCH` and exits 0 when the host has room for another lane. Otherwi
 ### `dori send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]`
 Posts a message, or edits one with `--edit`. Tokens come from `DORI_SLACK_TOKEN`, or when that is unset or empty from the file `DORI_SLACK_TOKEN_FILE` names (plus `DORI_SLACK_COOKIE` for a user token). The file must be a regular file you own and owner-only (`chmod 600`), checked and read through one open descriptor; a file open to group or others, owned by someone else, not a regular file (a FIFO never blocks the read), missing or empty is refused. Windows has no mode bits or uid to check, so there the file's ACL is the owner's to set, and `dori boot` prints `SLACK token-file: the token file's NTFS ACL is not checked on Windows; ...` as a reminder. Other tokens come from `DORI_TELEGRAM_TOKEN` or `DORI_DISCORD_TOKEN`. Text containing `$(` is refused, since it can only come from a shell string. Rate limits are retried with the server's wait time; other errors fail at once.
 
+### `dori react telegram --to CHAT --message ID [--emoji EMOJI]`
+Reacts to a Telegram message by calling `setMessageReaction` with `[{type:"emoji", emoji}]`. Default emoji is `👀` (the read-receipt emoji prescribed in SKILL.md Inbound). Prints `REACTED <id>`. The message id is validated the same way `dori send telegram --edit` validates it. Slack and Discord are out of scope; only `telegram` is accepted.
+
 ### `dori presence <slack|discord>`
 Keeps the account shown as online until stopped.
 - **Discord:** the bot connects to the gateway and identifies as online.

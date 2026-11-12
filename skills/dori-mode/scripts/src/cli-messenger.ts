@@ -165,8 +165,25 @@ const inbound: Command = async ({ key, loopMinutes, config }) => {
   });
 };
 
+const react: Command = async ({ key, need, opt, values }) => {
+  const platform = key ?? die("react needs telegram");
+  if (platform !== "telegram") die(`react is only supported for telegram, not ${platform}`);
+  const to = need("to");
+  const token = (name: string) => process.env[name] ?? die(`${name} is not set`);
+  const rawMessage = opt("message") ?? "";
+  const messageId =
+    values["message"] !== undefined && /^[1-9]\d*$/.test(rawMessage) && Number.isSafeInteger(Number(rawMessage))
+      ? Number(rawMessage)
+      : die("--message must be a Telegram message id, a whole number above 0");
+  const emoji = opt("emoji") ?? "👀";
+  const tg = new Telegram(fetchHttp, realClock, token("DORI_TELEGRAM_TOKEN"));
+  await tg.react({ chatId: to }, messageId, emoji);
+  console.log(`REACTED ${messageId}`);
+};
+
 export const messengerCommands: Readonly<Record<string, Command>> = {
   send,
+  react,
   presence,
   inbound,
   transcribe: async ({ key, config }) => {

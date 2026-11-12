@@ -53,6 +53,8 @@ const USAGE = `dori <command> [options]
   can-launch                           exit 0 if the host has room for a new lane, else print why and exit 4
   send <slack|telegram|discord> --to TARGET --text TEXT [--thread ID] [--edit ID]
                                        post or edit a message (tokens from DORI_SLACK_TOKEN or the file DORI_SLACK_TOKEN_FILE names, DORI_TELEGRAM_TOKEN, DORI_DISCORD_TOKEN)
+  react telegram --to CHAT --message ID [--emoji EMOJI]
+                                       react to a message (default emoji: 👀); prints REACTED <id>
   presence <slack|discord>             keep the account shown as online until stopped
   transcribe <audio-file>              run hooks.transcribe and print the text
   inbound slack|telegram [--loop MIN]  print INBOUND lines: Slack unread thread replies / Telegram owner DMs, edits and media + configured topic
@@ -102,6 +104,8 @@ const flags = parseArgs({
     global: { type: "boolean" },
     source: { type: "string" },
     open: { type: "boolean" },
+    message: { type: "string" },
+    emoji: { type: "string" },
   },
 });
 

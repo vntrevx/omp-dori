@@ -97,6 +97,14 @@ export class Telegram {
   async reopenTopic(chatId: number | string, threadId: number): Promise<void> {
     await this.call("reopenForumTopic", { chat_id: chatId, message_thread_id: threadId });
   }
+
+  async react(t: TgTarget, messageId: number, emoji: string): Promise<void> {
+    await this.call("setMessageReaction", {
+      ...this.where(t),
+      message_id: messageId,
+      reaction: [{ type: "emoji", emoji }],
+    });
+  }
 }
 
 export const THINKING = "Thinking…";
