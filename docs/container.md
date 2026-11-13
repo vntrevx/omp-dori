@@ -1,6 +1,6 @@
-# Running the OMP Dori candidate in a container
+# Maintainer source-container recipe
 
-This recipe packages **this local candidate**, including the complete upstream harness, skill, shared runtime adapters and retained OMP extension. It does not clone a separate Dori release. No image is published, and no build or container execution has been performed as part of this source port. MAIN owns build acceptance, review and isolated OMP/messenger QA; this document records inputs and expected behavior, not a deployed or verified result.
+This maintainer recipe packages **the local source checkout**, including the complete upstream harness, skill, shared runtime adapters and retained OMP extension. It does not clone a separate Dori release. Public consumers should follow the [verified release installer and support guide](releases.md). This recipe's build and session checks are separate evidence, not a published or independently validated consumer image. The first public preview supports Linux x64/herdr/Discord; the retained hc/other-architecture recipe does not expand that live support scope.
 
 The primary `dori` command runs `skills/dori-mode/scripts/src/cli.ts`. `dori harness <args>` dispatches to the complete root CLI; `dori-harness <args>` and `bun /opt/omp-dori/src/cli.ts <args>` also reach it. The image never assigns the root CLI the primary `dori` name.
 
@@ -79,6 +79,8 @@ if command -v herdr >/dev/null 2>&1; then herdr integration install omp; fi
 ```
 
 Edit `runtime`, `leadPane`, `laneWorkspace`, `defaultCwd`, model settings and hooks for this container. Set messenger hooks only to the isolated QA destination when that QA stage starts. The image links the skill at `~/.agents/skills/dori-mode`, the extension at `~/.omp/agent/extensions/omp-dori`, and pinned omp-ulw at `~/.dori/omp-ulw`. The extension's default `ompUlwPath` resolves through that link; an explicit config override remains the operator's choice.
+
+This source-container layout keeps configured dependency paths unchanged. Verified consumer releases resolve their managed `~/.dori/releases/consumer-dependencies/omp-ulw-<commit>` paths against the loaded source's own lock; explicit external paths remain user-owned. See [consumer installation layout](releases.md#installation-layout-and-preserved-data).
 
 Clone work repositories into `~/projects`. For the primary messenger workflow, start `omp --dori-role dori` inside the runtime and follow the skill's onboarding. For a deliberate harness evaluation, from the desired project directory:
 
