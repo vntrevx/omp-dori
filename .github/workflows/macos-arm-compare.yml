@@ -1,0 +1,62 @@
+name: macos-arm-comparison
+
+# Temporary, isolated experiment. Not a release gate. Never merge this workflow.
+on:
+  push:
+    branches: [dot/macos-arm-compare-20261113]
+
+permissions:
+  contents: read
+
+jobs:
+  compare-macos:
+    name: compare-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Record runner identity
+        run: |
+          date -u '+runner_ready=%Y-%m-%dT%H:%M:%SZ'
+          uname -m
+          test "$(uname -m)" = arm64
+          sw_vers
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 0df6dbf247418e3284d810fd06700465d1a520cf
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Check out pinned omp-ulw test fixture
+        run: |
+          pin="$(tr -d '[:space:]' < omp-ulw.lock)"
+          git clone --quiet https://github.com/dbc-hbin/omp-ulw.git ref/omp-ulw
+          git -C ref/omp-ulw -c advice.detachedHead=false checkout --quiet "$pin"
+          test "$(git -C ref/omp-ulw rev-parse HEAD)" = "$pin"
+      - name: Check out exact explicit-override compatibility fixture
+        run: |
+          pin=cbfe5ee72e5b2783af01616e7f4d3da5e3f9180d
+          compat="$RUNNER_TEMP/omp-dori-compat-ulw"
+          git clone --quiet --no-checkout --shared "$GITHUB_WORKSPACE/ref/omp-ulw" "$compat"
+          git -C "$compat" fetch --quiet --no-tags https://github.com/dbc-hbin/omp-ulw.git "$pin"
+          git -C "$compat" -c advice.detachedHead=false checkout --quiet "$pin"
+          test "$(git -C "$compat" rev-parse HEAD)" = "$pin"
+          printf 'DORI_TEST_COMPAT_ULW_ENTRY=%s/index.ts\n' "$compat" >> "$GITHUB_ENV"
+      - name: Install exact native OMP test host
+        run: bun install --frozen-lockfile
+        working-directory: test/fixtures/omp-native-host
+      - name: Bind exact native OMP test host
+        run: |
+          host="$GITHUB_WORKSPACE/test/fixtures/omp-native-host/node_modules/@oh-my-pi/pi-coding-agent"
+          bun -e 'const p = await Bun.file(process.argv[1] + "/package.json").json(); if (p.version !== "18.18.8") throw new Error("unexpected native OMP fixture version: " + p.version)' "$host"
+          printf 'DORI_TEST_OMP_ROOT=%s\n' "$host" >> "$GITHUB_ENV"
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: skills/dori-mode/scripts
+      - run: bun run test:ci
+      - run: bun run test:skill
+      - run: bun run test:extension
