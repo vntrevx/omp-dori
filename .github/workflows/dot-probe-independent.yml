@@ -1,0 +1,30 @@
+name: dot concurrency probe independent
+on:
+  push:
+    branches: [dot/concurrency-probe-20261113]
+permissions:
+  contents: read
+concurrency:
+  group: dot-probe-independent-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record fast-job start
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          printf 'source=%s run=%s\n' "$SOURCE_SHA" "$RUN_ID"
+          date -u +%FT%TZ
+  delayed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Simulate a slow dependency without using Mac capacity
+        run: |
+          date -u +%FT%TZ
+          sleep 90
+          date -u +%FT%TZ
