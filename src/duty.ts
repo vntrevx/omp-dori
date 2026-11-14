@@ -9,6 +9,7 @@ import { escalation, progressOf, stalled, waitingOn, waitingSinceOf } from "./pr
 import type { SessionRef } from "./runtime/types.ts";
 import type { Lane } from "./store-types.ts";
 import { ageText, hhmm } from "./fit.ts";
+import { WIDTH } from "./status-view.ts";
 
 /** Quiet minutes before the first and second nudge; the lead is told at ESCALATE_MINUTES without progress. */
 export const NUDGE_MINUTES = [10, 20] as const;
@@ -155,15 +156,19 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       if (due === undefined || quietMin < due) continue;
       const since = progressOf(lane);
       const waiting = lane.status === "waiting";
-      // Built and queued before it is counted: a nudge that could not be built or queued is not used up.
-      const text = prompt(waiting ? "nudge-waiting.md" : "nudge.md", {
+      const vars = {
         key: lane.key,
         minutes: String(Math.floor(quietMin)),
         since: hhmm(since),
         age: ageText(now - since),
         dori: d.doriCmd,
-        ...(waiting ? { target: waitingOn(lane), waitingSince: hhmm(waitingSinceOf(lane)) } : {}),
-      });
+        ...(waiting ? { target: "", waitingSince: hhmm(waitingSinceOf(lane)) } : {}),
+      };
+      // Built and queued before it is counted: a nudge that could not be built or queued is not used up. A waiting
+      // nudge's target gets what its first line leaves of WIDTH beside the key (at most 40 columns), so the time shows.
+      const name = waiting ? "nudge-waiting.md" : "nudge.md";
+      const room = waiting ? WIDTH - Bun.stringWidth(prompt(name, vars).split("\n")[0]!) : 0;
+      const text = prompt(name, waiting ? { ...vars, target: waitingOn(lane, Math.max(1, room)) } : vars);
       const ref = lane.sessionRef;
       const id = `nudge:${lane.key}:${since}:${lane.nudges + 1}`;
       if (!underInboxLock(d, ref, (inbox) => d.store.enqueueOnce(inbox, { at: now, from: "duty", text, id }))) {

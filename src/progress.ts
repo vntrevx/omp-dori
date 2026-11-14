@@ -87,8 +87,8 @@ export const blockerOf = (text: string): string =>
 export const waitingTarget = (lane: Lane): string =>
   oneLine(lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?")) || "?";
 
-/** What a waiting lane waits on, cut to 40 columns. */
-export const waitingOn = (lane: Lane): string => fitEnd(waitingTarget(lane), 40);
+/** What a waiting lane waits on, cut to 40 columns, or to `cols` when a line leaves it fewer. */
+export const waitingOn = (lane: Lane, cols = 40): string => fitEnd(waitingTarget(lane), Math.min(40, cols));
 
 /** When the lane started waiting; a record from before `waitingSince` counts from its last progress. */
 export const waitingSinceOf = (lane: Lane): number => lane.waitingSince ?? progressOf(lane);

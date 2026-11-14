@@ -33,6 +33,27 @@ describe("a waiting lane after an upgrade", () => {
     expect(s.d.store.lane("blocked")!.nudges).toBe(1);
   });
 
+  // The nudge's first line holds the key whole; the target gets what is left of 120 columns, so the time still shows.
+  test("a waiting nudge for a 41-character key and a long target keeps its first line within 120 columns", async () => {
+    const s = setup();
+    const key = `k${"-long".repeat(8)}`;
+    expect(key).toHaveLength(41);
+    const lane = await startLane(s.d, key, s.brief, { group: "w1" });
+    const pane = s.w.panes.get(lane.paneId)!;
+    pane.status = "idle";
+    await report(s.d, key, "x", {
+      status: "waiting",
+      waitingFor: "the release build on the shared runner, then deploy",
+    });
+    s.w.clock = lane.createdAt + 10 * MIN;
+    expect(await dutyTick(s.d)).toContainEqual({ lane: key, action: "nudge-1" });
+    const first = pane.received.at(-1)!.split("\n")[0]!;
+    expect(first).toMatch(
+      new RegExp(`^\\[duty -> ${key}\\] Waiting on the release build\\S* .*… since ${hhmm(lane.createdAt)};`),
+    );
+    expect(Bun.stringWidth(first)).toBeLessThanOrEqual(120);
+  });
+
   // A key and a ref together 55 to 61 columns wide leave the waiting text just under what it needs beside them.
   test("a waiting lane beside a long key and ref keeps `since HH:MM` whole, on a line of its own if need be", async () => {
     const s = setup();
