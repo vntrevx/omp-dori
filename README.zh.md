@@ -71,10 +71,16 @@ macOS 和 hc 有 CI 覆盖，源码中也保留了适配器，但不属于受支
 - [维护者容器构建指南](docs/container.md) · [每小时循环与待办队列](docs/hourly-loop.md)
 - [贡献指南](CONTRIBUTING.md) · [变更日志](CHANGELOG.md) · [修改副本声明](NOTICE)
 
-## 限制、隐私与许可证
+## 参与贡献
+
+请在此 fork 提交 omp-dori 的 [issue](https://github.com/vntrevx/omp-dori/issues) 和 [PR](https://github.com/vntrevx/omp-dori/pulls)，并参阅[贡献指南](CONTRIBUTING.md)。上游 CLA 流程仅适用于上游项目。
+
+## 限制与隐私
 
 Dori 使用你提供的账号和权限运行。对外部系统的操作仍需所有者授权；完成检查只证明配置的信号已满足，并不保证每项结果都正确。请仅启用你打算运行的会话和监控器。AI 会话消耗你自己的提供商配额。
 
 可选遥测可通过 `DORI_TELEMETRY=0` 或 `DO_NOT_TRACK=1` 关闭。公开报告中请勿包含凭据或私有会话、项目数据。
 
-上游代码仍适用 [Sustainable Use License 1.0](LICENSE)：允许自身内部业务用途及非商业、个人用途，并附有分发和声明保留条件。既有 OMP 集成声明保留在 [LICENSE.omp-dori](LICENSE.omp-dori) 中；这并未将上游代码重新许可为 MIT。[NOTICE](NOTICE) 记录了修改副本和来源署名。omp-ulw 及其他第三方组件保留各自的许可证。
+## 许可证
+
+上游代码仍适用 [Sustainable Use License 1.0](LICENSE)：允许自身内部业务用途及非商业、个人用途，并附有分发和声明保留条件。既有 OMP 集成声明保留在 [LICENSE.omp-dori (MIT)](LICENSE.omp-dori) 中；这并未将上游代码重新许可为 MIT。[NOTICE](NOTICE) 记录了修改副本和来源署名。omp-ulw 及其他第三方组件保留各自的许可证。
