@@ -39,9 +39,14 @@ describe("the lane board", () => {
     );
     expect(lines.map((l) => l.split(" ")[0])).toEqual(["stuck", "ready-one", "fresh", "lost", "done"]);
     const at = hhmm(NOW - 130 * MIN);
+    // A record from before `--for` names its last report as the target and waits since its last progress; the last
+    // entry follows, cut to the 120 columns.
     expect(lines[0]).toMatch(
-      new RegExp(`^stuck\\s+waiting\\s+herdr\\s+w1:p3\\s+progress 2h10m \\(${at}\\)\\s+report ${at}: report text$`),
+      new RegExp(
+        `^stuck\\s+waiting\\s+herdr\\s+w1:p3\\s+progress 2h10m \\(${at}\\)\\s+waiting: report text since ${at} \\| rep`,
+      ),
     );
+    expect(Bun.stringWidth(lines[0]!)).toBeLessThanOrEqual(120);
     expect(lines.at(-1)).toBe("done 2 (latest new-done, 35m ago)");
   });
 
