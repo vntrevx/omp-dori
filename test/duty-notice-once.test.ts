@@ -7,24 +7,9 @@ import { hooksSettled } from "../src/hooks.ts";
 import { readQueue } from "../src/inbox-files.ts";
 import { startLane } from "../src/lanes.ts";
 import { href } from "./fake.ts";
-import { setup } from "./harness-setup.ts";
+import { quietLane } from "./harness-setup.ts";
 
 const MIN = 60_000;
-
-async function quietLane() {
-  const s = setup();
-  const lane = await startLane(s.d, "talker", s.brief, { group: "w1" });
-  const pane = s.w.panes.get(lane.paneId)!;
-  pane.status = "idle";
-  s.lead.received.length = 0;
-  const at = async (min: number) => {
-    s.w.clock = lane.createdAt + min * MIN;
-    return dutyTick(s.d);
-  };
-  // Counted inside batches too: a busy lead gets queued messages as one numbered message.
-  const told = (tag: string) => s.lead.received.join("\n").split(`[${tag} talker]`).length - 1;
-  return { ...s, lane, pane, at, told };
-}
 
 /**
  * The process dies at the next call of `method`, once: what that call would have written is not written. "queue" is

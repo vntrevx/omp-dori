@@ -20,22 +20,45 @@ const watched = (lane: Lane): boolean =>
   (lane.status === "working" || lane.status === "waiting") && lane.migration !== true;
 
 /**
- * Queues the LOST notice for the lead under a fixed id. With no lead registered it waits in a queue of its own
- * (`oweLead`), not in the lane record: the same key may be started again, replacing that record, before one is.
+ * Runs `write` on the inbox of `ref` (the one it was forwarded to, if it was) under that inbox's lock, the lock every
+ * rewrite of the queue holds: a flush that read the queue before an unlocked append writes it back without the
+ * appended entry. False while another process holds the lock: nothing is written, and the next pass tries again.
  */
-function queueLost(d: Deps, lane: Lane, now: number): SessionRef | undefined {
-  const text = `[LOST ${lane.key}] pane ${refText(lane.sessionRef)} closed without a final answer`;
-  const msg = { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` };
-  const leadRef = d.store.roles().lead;
-  if (leadRef) d.store.enqueueOnce(leadRef, msg);
-  else oweLead(d.store.root, msg);
-  return leadRef;
+function underInboxLock(d: Deps, ref: SessionRef, write: (inbox: SessionRef) => void): boolean {
+  const inbox = d.store.forwardOf(ref) ?? ref;
+  const release = d.store.lockInbox(inbox, d.now());
+  if (!release) return false;
+  try {
+    write(inbox);
+    return true;
+  } finally {
+    release();
+  }
 }
 
-/** Once a lead is registered, the notices kept for it while none was move into its inbox. */
+const busy = (lane: Lane, whose: string): DutyEvent => ({
+  lane: lane.key,
+  action: "notice-deferred",
+  detail: `${whose} inbox is being flushed; tried again on the next pass`,
+});
+
+/**
+ * Queues the LOST notice for the lead under a fixed id. With no lead registered, or while a flush holds the lead's
+ * inbox, it waits in a queue of its own (`oweLead`), not in the lane record: the same key may be started again,
+ * replacing that record, before the notice is moved. Returns whether it reached the lead's inbox.
+ */
+function queueLost(d: Deps, lane: Lane, now: number, leadRef: SessionRef | undefined): boolean {
+  const text = `[LOST ${lane.key}] pane ${refText(lane.sessionRef)} closed without a final answer`;
+  const msg = { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` };
+  if (leadRef && underInboxLock(d, leadRef, (inbox) => d.store.enqueueOnce(inbox, msg))) return true;
+  oweLead(d.store.root, msg);
+  return false;
+}
+
+/** Once a lead is registered, the notices kept for it move into its inbox, under its lock (else on a later pass). */
 function payOwed(d: Deps): void {
   const lead = d.store.roles().lead;
-  if (lead) payLead(d.store.root, d.store.inboxPath(d.store.forwardOf(lead) ?? lead));
+  if (lead) underInboxLock(d, lead, (inbox) => payLead(d.store.root, d.store.inboxPath(inbox)));
 }
 
 /** One proactive pass: flush inboxes of panes that became idle, nudge silent lanes, escalate, detect lost panes. */
@@ -83,13 +106,15 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
         // Marked lost and its hook run whether or not a lead is registered: a lost lane must stop counting as open. The
         // notice is queued first, under a fixed id, so a pass cut short before the lane is saved repeats it without a
         // second notice.
-        const leadRef = queueLost(d, lane, now);
+        const leadRef = d.store.roles().lead;
+        const queued = queueLost(d, lane, now, leadRef);
         lane.status = "lost";
         lane.log.push({ at: now, kind: "lost", text: "pane disappeared without READY" });
         d.store.saveLane(lane);
         void runHook(d, "onLost", { key: lane.key, text: "pane disappeared without READY", evidence: "" });
         events.push({ lane: lane.key, action: "lost" });
-        if (leadRef) await flushInbox(d, leadRef);
+        if (leadRef && queued) await flushInbox(d, leadRef);
+        else if (leadRef) events.push(busy(lane, "the lead's"));
         else events.push({ lane: lane.key, action: "lost-no-lead", detail: "no lead registered; told once one is" });
         continue;
       }
@@ -109,12 +134,13 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
           continue;
         }
         const msg = escalation(lane, st, now);
-        d.store.enqueueOnce(leadRef, {
-          at: now,
-          from: "duty",
-          text: msg,
-          id: `escalate:${lane.key}:${progressOf(lane)}`,
-        });
+        const id = `escalate:${lane.key}:${progressOf(lane)}`;
+        if (
+          !underInboxLock(d, leadRef, (inbox) => d.store.enqueueOnce(inbox, { at: now, from: "duty", text: msg, id }))
+        ) {
+          events.push(busy(lane, "the lead's"));
+          continue;
+        }
         lane.escalatedAt = now;
         lane.log.push({ at: now, kind: "escalate", text: msg });
         d.store.saveLane(lane);
@@ -137,7 +163,11 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
         dori: d.doriCmd,
       });
       const ref = lane.sessionRef;
-      d.store.enqueueOnce(ref, { at: now, from: "duty", text, id: `nudge:${lane.key}:${since}:${lane.nudges + 1}` });
+      const id = `nudge:${lane.key}:${since}:${lane.nudges + 1}`;
+      if (!underInboxLock(d, ref, (inbox) => d.store.enqueueOnce(inbox, { at: now, from: "duty", text, id }))) {
+        events.push(busy(lane, "the lane's"));
+        continue;
+      }
       lane.nudges += 1;
       lane.log.push({ at: now, kind: "nudge", text: `idle ${Math.floor(quietMin)} min` });
       d.store.saveLane(lane);
