@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cpus, loadavg } from "node:os";
 import { join, resolve } from "node:path";
 import { shq } from "./delivery.ts";
@@ -89,8 +89,17 @@ export const agentCommand = (d: Deps, role: "dori" | "lane"): string =>
 /** `DORI_PROMPTS_DIR` when set, else the repo's `prompts/`. */
 export const promptsDir = (): string => process.env["DORI_PROMPTS_DIR"] || PROMPTS;
 
+/**
+ * The template `name` from `promptsDir()`, or the built-in one when that directory has none: a prompts directory made
+ * for an older dori lacks the templates added since (nudge-waiting.md), and those keep their defaults.
+ */
+export function promptFile(name: string): string {
+  const own = join(promptsDir(), name);
+  return existsSync(own) ? own : join(PROMPTS, name);
+}
+
 export const prompt = (name: string, vars: Record<string, string>): string =>
-  readFileSync(join(promptsDir(), name), "utf8").replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`);
+  readFileSync(promptFile(name), "utf8").replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`);
 
 /** The roles `dori role` registers by hand; `dori up` also registers the two loop sessions. */
 export const ROLES: readonly Role[] = ["lead", "duty"];

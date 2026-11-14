@@ -74,10 +74,15 @@ describe("the lane board", () => {
     const b = `lane-${"k".repeat(35)}b`;
     const hc = { ...lane(b, "working", 70), sessionRef: { runtime: "hc" as const, id: "t1b2c3d4e5f6g7h8" } };
     const lines = laneBoard([lane(a, "waiting", 90), hc], NOW);
-    expect(lines).toHaveLength(2);
+    // The waiting lane's target and time do not fit beside these columns: they go on the indented line, whole.
+    expect(lines).toHaveLength(3);
     expect(lines[0]!.split(" ")[0]).toBe(a);
-    expect(lines[1]!.split(" ")[0]).toBe(b);
-    expect(lines[1]).toContain(" hc:t1b2c3d4e5f6g7h8 ");
+    const t = hhmm(NOW - 90 * MIN);
+    expect(lines[1]).toMatch(
+      new RegExp(`^ {2}progress 1h30m \\(${t}\\) +waiting: report text since ${t} \\| report ${t}`),
+    );
+    expect(lines[2]!.split(" ")[0]).toBe(b);
+    expect(lines[2]).toContain(" hc:t1b2c3d4e5f6g7h8 ");
     for (const line of lines) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(120);
     // Columns too wide for the rest move it below the lane's name; the name, status and ref wrap whole, never cut.
     const wide = { ...lane(a, "working", 5), sessionRef: { runtime: "hc" as const, id: `t${"z".repeat(60)}` } };
