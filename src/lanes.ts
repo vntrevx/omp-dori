@@ -5,7 +5,7 @@ import { agentCommand, prompt, type Deps } from "./harness.ts";
 import { settled, tellLead, type SendResult } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { runHook } from "./hooks.ts";
-import { applyEvidence, blockerOf } from "./progress.ts";
+import { applyEvidence, blockerOf, waitingSinceOf, waitingTarget } from "./progress.ts";
 import { refText } from "./refs.ts";
 import { groupId } from "./runtime/group.ts";
 import { openSession } from "./runtime/types.ts";
@@ -88,6 +88,10 @@ export async function report(
   const lane = openLane(d, key);
   const now = d.now();
   const evidence = opts.evidence ?? [];
+  // A lane already waiting keeps its start and target. Both are read before this report touches the record: a record
+  // from before `waitingSince`/`--for` infers them from its progress and its last report, and new evidence or this
+  // report's text would otherwise move them.
+  const still = lane.status === "waiting" ? { since: waitingSinceOf(lane), target: waitingTarget(lane) } : undefined;
   // The clock is read before this report joins the log: a record from before the clock falls back to its last report,
   // and that fallback must not count the report being judged (a lane could otherwise talk its way out of a stall).
   const progress = applyEvidence(lane, evidence, now);
@@ -95,9 +99,8 @@ export async function report(
   lane.lastActivityAt = now;
   if (opts.status === "waiting") {
     // Waiting is not progress: the lane stays on the same clock, and the target is named in its nudges and escalation.
-    const still = lane.status === "waiting";
-    lane.waitingSince = still ? (lane.waitingSince ?? now) : now;
-    lane.waitingFor = opts.waitingFor?.trim() || (still ? lane.waitingFor : undefined) || blockerOf(text);
+    lane.waitingSince = still?.since ?? now;
+    lane.waitingFor = opts.waitingFor?.trim() || still?.target || blockerOf(text);
   } else if (opts.status === "working") {
     delete lane.waitingFor;
     delete lane.waitingSince;

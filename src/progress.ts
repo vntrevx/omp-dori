@@ -88,9 +88,12 @@ export const blockerOf = (text: string): string =>
     .replace(/^\s*WAITING:\s*/i, "")
     .trim() || "?";
 
-/** What a waiting lane waits on, at most 40 columns; a record from before `--for` names its last report's blocker. */
-export const waitingOn = (lane: Lane): string =>
-  fitEnd(lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?"), 40);
+/** What a waiting lane waits on; a record from before `--for` names its last report's blocker. */
+export const waitingTarget = (lane: Lane): string =>
+  lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?");
+
+/** What a waiting lane waits on, cut to 40 columns. */
+export const waitingOn = (lane: Lane): string => fitEnd(waitingTarget(lane), 40);
 
 /** When the lane started waiting; a record from before `waitingSince` counts from its last progress. */
 export const waitingSinceOf = (lane: Lane): number => lane.waitingSince ?? progressOf(lane);
