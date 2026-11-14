@@ -93,6 +93,25 @@ describe("a waiting lane", () => {
     expect(lead.received.at(-1)!.split("\n")[1]).toBe(`waiting on CI on acme/app#3 since ${hhmm(lane.createdAt)}`);
   });
 
+  test("a record from before --for keeps its inferred start and target when it reports again before escalation", async () => {
+    const { w, d, lead, lane, at } = await waitingLane();
+    const old = d.store.lane("blocked")!;
+    delete old.waitingFor;
+    delete old.waitingSince;
+    d.store.saveLane(old);
+    w.clock = lane.createdAt + 25 * MIN;
+    await report(d, "blocked", "STUCK: no log for 15m", { status: "waiting" });
+    expect(d.store.lane("blocked")).toMatchObject({ waitingSince: lane.createdAt, waitingFor: "CI on acme/app#3" });
+    w.clock = lane.createdAt + 30 * MIN;
+    const log = join(d.store.root, "ci.log");
+    writeFileSync(log, "still red");
+    utimesSync(log, w.clock / 1000, w.clock / 1000);
+    await report(d, "blocked", "CI retried", { status: "waiting", evidence: [log] });
+    expect(d.store.lane("blocked")).toMatchObject({ waitingSince: lane.createdAt, progressAt: w.clock });
+    expect(await at(70)).toContainEqual({ lane: "blocked", action: "escalated" });
+    expect(lead.received.at(-1)!.split("\n")[1]).toBe(`waiting on CI on acme/app#3 since ${hhmm(lane.createdAt)}`);
+  });
+
   test("the status line names what it waits on and since when, within 120 columns, the time kept on a long target", async () => {
     const { w, d, lane } = await waitingLane({ waitingFor: "CI 812" });
     const since = hhmm(lane.createdAt);
