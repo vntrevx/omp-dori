@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dutyTick } from "../src/duty.ts";
 import type { Deps } from "../src/harness.ts";
@@ -106,6 +106,39 @@ describe("a duty notice reaches its reader exactly once", () => {
     await hooksSettled();
     expect(told("LOST")).toBe(1);
     expect(hooked()).toEqual([["talker"]]);
+  });
+
+  test("a lane lost with no lead and started again under the same key: the lead still hears of the loss, once", async () => {
+    const { w, d, lane, brief, told } = await quietLane();
+    rmSync(join(d.store.root, "roles.json"));
+    w.panes.delete(lane.paneId);
+    await dutyTick(d);
+    expect(d.store.lane("talker")!.status).toBe("lost");
+    // The new record replaces the lost one before any lead is registered.
+    w.clock += MIN;
+    const again = await startLane(d, "talker", brief, { group: "w1" });
+    expect(again.createdAt).not.toBe(lane.createdAt);
+    await dutyTick(d);
+    d.store.setRole("lead", href("w1:p1"));
+    await dutyTick(d);
+    await dutyTick(d);
+    expect(told("LOST")).toBe(1);
+  });
+
+  test("a move of the kept notices into the lead's inbox cut short after its append: the next pass adds none twice", async () => {
+    const { w, d, lane, told } = await quietLane();
+    rmSync(join(d.store.root, "roles.json"));
+    w.panes.delete(lane.paneId);
+    await dutyTick(d);
+    // The move appended the kept notice to the lead's inbox and stopped before removing the copy it renamed aside.
+    const kept = join(d.store.root, "duty", "lead.jsonl");
+    renameSync(kept, `${kept}.merging`);
+    d.store.setRole("lead", href("w1:p1"));
+    for (const m of readQueue(`${kept}.merging`)) d.store.enqueue(href("w1:p1"), m);
+    await dutyTick(d);
+    await dutyTick(d);
+    expect(told("LOST")).toBe(1);
+    expect(existsSync(`${kept}.merging`)).toBe(false);
   });
 
   test("killed between recording a delivered notice's id and rewriting its queue: the next flush does not resend it", async () => {

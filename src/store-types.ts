@@ -12,7 +12,6 @@ export type LaneStatus = "working" | "waiting" | "ready" | "done" | "lost";
  * the evidence that last moved it. `evidenceSeen`: links that already counted once. `evidenceMtimes`: each file that
  * counted, by absolute path, with the modification time it counted with. `escalatedAt`: when the lead was last told the
  * lane made no progress; one escalation per stall. `lastActivityAt`: the last sign of life (any report, a working pane).
- * `lostUntold`: marked lost while no lead was registered; the duty loop tells the lead once one is.
  */
 export type Lane = {
   key: string;
@@ -33,7 +32,6 @@ export type Lane = {
   evidenceMtimes?: Record<string, number>;
   escalatedAt?: number;
   nudges: number;
-  lostUntold?: true;
   final?: { text: string; evidence: string[]; at: number };
   log: { at: number; kind: "start" | "report" | "ready" | "nudge" | "escalate" | "done" | "lost"; text: string }[];
 };

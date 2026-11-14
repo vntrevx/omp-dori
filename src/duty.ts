@@ -2,6 +2,7 @@ import { DeliveryUncertain, failureDetail } from "./delivery.ts";
 import { type Deps, prompt } from "./harness.ts";
 import { runHook } from "./hooks.ts";
 import { flushInbox } from "./inbox.ts";
+import { oweLead, payLead } from "./inbox-files.ts";
 import { Refusal } from "./refusal.ts";
 import { refText } from "./refs.ts";
 import { escalation, progressOf, stalled } from "./progress.ts";
@@ -18,21 +19,23 @@ export type DutyEvent = { lane?: string; pane?: string; action: string; detail?:
 const watched = (lane: Lane): boolean =>
   (lane.status === "working" || lane.status === "waiting") && lane.migration !== true;
 
-function queueLost(d: Deps, leadRef: SessionRef, lane: Lane, now: number): void {
+/**
+ * Queues the LOST notice for the lead under a fixed id. With no lead registered it waits in a queue of its own
+ * (`oweLead`), not in the lane record: the same key may be started again, replacing that record, before one is.
+ */
+function queueLost(d: Deps, lane: Lane, now: number): SessionRef | undefined {
   const text = `[LOST ${lane.key}] pane ${refText(lane.sessionRef)} closed without a final answer`;
-  d.store.enqueueOnce(leadRef, { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` });
+  const msg = { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` };
+  const leadRef = d.store.roles().lead;
+  if (leadRef) d.store.enqueueOnce(leadRef, msg);
+  else oweLead(d.store.root, msg);
+  return leadRef;
 }
 
-/** Lanes marked lost while no lead was registered: their notice is queued once one is, then the debt is cleared. */
-function tellLost(d: Deps, now: number): void {
-  const leadRef = d.store.roles().lead;
-  if (!leadRef) return;
-  for (const lane of d.store.lanes()) {
-    if (lane.lostUntold !== true) continue;
-    queueLost(d, leadRef, lane, now);
-    delete lane.lostUntold;
-    d.store.saveLane(lane);
-  }
+/** Once a lead is registered, the notices kept for it while none was move into its inbox. */
+function payOwed(d: Deps): void {
+  const lead = d.store.roles().lead;
+  if (lead) payLead(d.store.root, d.store.inboxPath(d.store.forwardOf(lead) ?? lead));
 }
 
 /** One proactive pass: flush inboxes of panes that became idle, nudge silent lanes, escalate, detect lost panes. */
@@ -41,7 +44,7 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
   const stop = d.store.stop("duty");
   if (stop) return [{ action: "stopped", detail: stop.reason }];
   const events: DutyEvent[] = [];
-  tellLost(d, d.now());
+  payOwed(d);
   for (const ref of d.store.inboxPanes()) {
     const paneId = refText(ref);
     try {
@@ -79,10 +82,8 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       if (st === "gone") {
         // Marked lost and its hook run whether or not a lead is registered: a lost lane must stop counting as open. The
         // notice is queued first, under a fixed id, so a pass cut short before the lane is saved repeats it without a
-        // second notice; with no lead registered the lane owes it (`lostUntold`) and tellLost queues it once one is.
-        const leadRef = d.store.roles().lead;
-        if (leadRef) queueLost(d, leadRef, lane, now);
-        else lane.lostUntold = true;
+        // second notice.
+        const leadRef = queueLost(d, lane, now);
         lane.status = "lost";
         lane.log.push({ at: now, kind: "lost", text: "pane disappeared without READY" });
         d.store.saveLane(lane);

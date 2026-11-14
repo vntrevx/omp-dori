@@ -95,10 +95,11 @@ export const forwardPending = (root: string, ref: SessionRef): boolean =>
 const keyOf = (m: QueuedMessage): string => `${m.at}\u0000${m.from}\u0000${m.text}`;
 
 /**
- * Appends the entries of `aside` (an inbox renamed aside, its ids still at `<from>.ids`) to the end of `into`, then
+ * Appends the entries of `aside` (a queue renamed aside, its ids still at `<from>.ids`) to the end of `into`, then
  * removes it. The ids `from` recorded as gone are recorded for `into` first and their entries are left behind, so a
- * notice delivered before the move is neither delivered nor queued again after it; an entry `into` already holds (a
- * merge cut short after its append, keyed by at+from+text) is not added again.
+ * notice delivered before the move is neither delivered nor queued again after it. An entry whose id `into` already
+ * holds or recorded as gone, or that `into` already holds (a merge cut short after its append, keyed by at+from+text),
+ * is not added again.
  */
 export function carryOver(aside: string, from: string, into: string, map: (m: QueuedMessage) => QueuedMessage): void {
   const done = doneIds(from);
@@ -107,13 +108,33 @@ export function carryOver(aside: string, from: string, into: string, map: (m: Qu
     into,
     [...done].filter((id) => !known.has(id)),
   );
-  const seen = new Set(readQueue(into).map(keyOf));
+  const held = readQueue(into);
+  const seen = new Set(held.map(keyOf));
+  const ids = new Set([...done, ...known, ...held.flatMap((m) => (m.id === undefined ? [] : [m.id]))]);
   for (const m of readQueue(aside)) {
-    if ((m.id !== undefined && done.has(m.id)) || seen.has(keyOf(m))) continue;
+    if ((m.id !== undefined && ids.has(m.id)) || seen.has(keyOf(m))) continue;
     seen.add(keyOf(m));
+    if (m.id !== undefined) ids.add(m.id);
     appendQueue(into, map(m));
   }
   rmSync(aside, { force: true });
+}
+
+// Notices for the lead found while no lead is registered (a lost lane's LOST) wait in `duty/lead.jsonl`, a queue of
+// their own outside any lane record, so a lane started again under the same key cannot drop one.
+const owedFile = (root: string): string => join(root, "duty", "lead.jsonl");
+
+export function oweLead(root: string, msg: QueuedMessage & { id: string }): void {
+  if (!readQueue(owedFile(root)).some((m) => m.id === msg.id)) appendQueue(owedFile(root), msg);
+}
+
+/** Moves the owed notices into the lead's inbox `into`; renamed aside first, so a run cut short is finished next time. */
+export function payLead(root: string, into: string): void {
+  const owed = owedFile(root);
+  const aside = `${owed}.merging`;
+  if (!existsSync(aside) && !existsSync(owed)) return;
+  if (!existsSync(aside)) renameSync(owed, aside);
+  carryOver(aside, owed, into, (m) => m);
 }
 
 /**
