@@ -3,7 +3,7 @@
 // that keeps saying "still waiting" is escalated to the lead like a silent one.
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { ageText, fitStart, hhmm, oneLine } from "./fit.ts";
+import { ageText, fitEnd, fitStart, hhmm, oneLine } from "./fit.ts";
 import type { Lane } from "./store-types.ts";
 
 /** Minutes without progress before the duty loop tells the lead, once per stall. */
@@ -81,18 +81,44 @@ export const stalled = (lane: Lane, now: number): boolean => {
   return now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 && (told === undefined || told <= progressOf(lane));
 };
 
+/** A blocker named in report text: its first line (a CR or line separator ends one too) without a leading `WAITING:`. */
+export const blockerOf = (text: string): string =>
+  oneLine(text.split(/[\n\r\u2028\u2029]/)[0]!.replace(/^\s*WAITING:\s*/i, "")) || "?";
+
 /**
- * The [ESCALATE] message: how long, what the pane is doing, how often it was nudged or talked, the last evidence. The
- * key line is the only one that can be long (a lane key is up to 41 characters); the counts get a line of their own so
- * no cut can drop them.
+ * What a waiting lane waits on, on one line; a record from before `--for` names its last report's blocker. A target is
+ * stored one-line, and one stored before that is made so here.
+ */
+export const waitingTarget = (lane: Lane): string =>
+  oneLine(lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?")) || "?";
+
+/** What a waiting lane waits on, cut to 40 columns. */
+export const waitingOn = (lane: Lane): string => fitEnd(waitingTarget(lane), 40);
+
+/** When the lane started waiting; a record from before `waitingSince` counts from its last progress. */
+export const waitingSinceOf = (lane: Lane): number => lane.waitingSince ?? progressOf(lane);
+
+/**
+ * The [ESCALATE] message: how long, what the pane is doing, how often it was nudged or talked, the last evidence; for a
+ * waiting lane also what it waits on. The key line is the only one that can be long (a lane key is up to 41 characters);
+ * the counts get a line of their own so no cut can drop them.
  */
 export function escalation(lane: Lane, pane: string, now: number): string {
   const since = progressOf(lane);
   const talk = lane.log.filter((e) => e.kind === "report" && e.at > since).length;
-  const head = `[ESCALATE ${lane.key}] no new evidence for ${ageText(now - since)} (since ${hhmm(since)})`;
+  const waiting = lane.status === "waiting";
+  const head = `[ESCALATE ${lane.key}${waiting ? " WAITING" : ""}] no new evidence for ${ageText(now - since)} (since ${hhmm(since)})`;
   const counts = `pane ${pane}, ${lane.nudges} nudges, ${talk} reports without evidence`;
   const last = lane.lastEvidence
     ? `${fitStart(oneLine(lane.lastEvidence.ref), 48)} @ ${hhmm(lane.lastEvidence.at)}`
     : "none recorded";
-  return `${head}\n${counts}\nlast evidence: ${last}. Next: check the lane, re-brief it, or close it.`;
+  const lines = waiting
+    ? [
+        head,
+        `waiting on ${waitingOn(lane)} since ${hhmm(waitingSinceOf(lane))}`,
+        counts,
+        `last evidence: ${last}. Next: check it is alive, or reassign the lane.`,
+      ]
+    : [head, counts, `last evidence: ${last}. Next: check the lane, re-brief it, or close it.`];
+  return lines.join("\n");
 }

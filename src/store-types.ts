@@ -12,6 +12,8 @@ export type LaneStatus = "working" | "waiting" | "ready" | "done" | "lost";
  * the evidence that last moved it. `evidenceSeen`: links that already counted once. `evidenceMtimes`: each file that
  * counted, by absolute path, with the modification time it counted with. `escalatedAt`: when the lead was last told the
  * lane made no progress; one escalation per stall. `lastActivityAt`: the last sign of life (any report, a working pane).
+ * `waitingFor`/`waitingSince`: what a waiting lane said it waits on (`report --status waiting --for`) and when it started
+ * waiting; a waiting lane runs on the same clock, and its nudges and escalation name them.
  */
 export type Lane = {
   key: string;
@@ -31,6 +33,8 @@ export type Lane = {
   evidenceSeen?: string[];
   evidenceMtimes?: Record<string, number>;
   escalatedAt?: number;
+  waitingFor?: string;
+  waitingSince?: number;
   nudges: number;
   final?: { text: string; evidence: string[]; at: number };
   log: { at: number; kind: "start" | "report" | "ready" | "nudge" | "escalate" | "done" | "lost"; text: string }[];
