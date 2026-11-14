@@ -1,14 +1,19 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { shq } from "./delivery.ts";
+import { oneLine } from "./fit.ts";
 import { agentCommand, prompt, type Deps } from "./harness.ts";
 import { settled, tellLead, type SendResult } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { runHook } from "./hooks.ts";
+import { applyEvidence, blockerOf, waitingSinceOf, waitingTarget } from "./progress.ts";
 import { refText } from "./refs.ts";
 import { groupId } from "./runtime/group.ts";
 import { openSession } from "./runtime/types.ts";
 import { KEY_RE, reservedKey, type Lane } from "./store-types.ts";
+
+/** The lead's `evidence:` line: each reference is the lane's own input, so a line break or escape in it stays out. */
+const evidenceLine = (evidence: readonly string[]): string => `evidence: ${evidence.map(oneLine).join(" ")}`;
 
 export async function startLane(
   d: Deps,
@@ -53,6 +58,7 @@ export async function startLane(
     status: "working",
     createdAt: now,
     lastActivityAt: now,
+    progressAt: now,
     nudges: 0,
     log: [{ at: now, kind: "start", text: briefFile }],
   };
@@ -70,21 +76,48 @@ function openLane(d: Deps, key: string): Lane {
   return lane;
 }
 
+/**
+ * Logs a lane's report and tells the lead. Only new evidence moves the progress clock and clears the nudge count; the
+ * returned lines say whether it did. `sent` is the delivery to the lead. `--status waiting` records what the lane waits
+ * on (`waitingFor`; else the target it already named; else the blocker in the text) and since when; `--status working`
+ * clears both.
+ */
 export async function report(
   d: Deps,
   key: string,
   text: string,
-  status?: "working" | "waiting",
-): Promise<SendResult | undefined> {
+  opts: { status?: "working" | "waiting"; evidence?: readonly string[]; waitingFor?: string } = {},
+): Promise<{ sent: SendResult | undefined; progress: string[] }> {
+  if (opts.waitingFor !== undefined && opts.status !== "waiting") throw new Refusal("--for needs --status waiting");
   const lane = openLane(d, key);
   const now = d.now();
-  lane.log.push({ at: now, kind: "report", text });
+  const evidence = opts.evidence ?? [];
+  // A lane already waiting keeps its start and target. Both are read before this report touches the record: a record
+  // from before `waitingSince`/`--for` infers them from its progress and its last report, and new evidence or this
+  // report's text would otherwise move them.
+  const still = lane.status === "waiting" ? { since: waitingSinceOf(lane), target: waitingTarget(lane) } : undefined;
+  // The clock is read before this report joins the log: a record from before the clock falls back to its last report,
+  // and that fallback must not count the report being judged (a lane could otherwise talk its way out of a stall).
+  const progress = applyEvidence(lane, evidence, now);
+  lane.log.push({ at: now, kind: "report", text: evidence.length ? `${text}\nevidence: ${evidence.join(" ")}` : text });
   lane.lastActivityAt = now;
-  lane.nudges = 0;
-  if (status) lane.status = status;
+  // A report that leaves the lane waiting (--status waiting, or no --status on a waiting lane) records the start and the
+  // target, so a record from before `waitingSince`/`--for` keeps what was inferred before this report moved its clock.
+  if (opts.status === "waiting" || (still && opts.status === undefined)) {
+    // Waiting is not progress: the lane stays on the same clock, and the target is named in its nudges and escalation.
+    // --for is shown on one line in nudges, the board and escalations, so it is stored that way.
+    lane.waitingSince = still?.since ?? now;
+    lane.waitingFor = oneLine(opts.waitingFor ?? "") || still?.target || blockerOf(text);
+  } else if (opts.status === "working") {
+    delete lane.waitingFor;
+    delete lane.waitingSince;
+  }
+  if (opts.status) lane.status = opts.status;
   d.store.saveLane(lane);
-  void runHook(d, "onReport", { key, text, evidence: "" });
-  return settled(tellLead(d, `[REPORT ${key}${status === "waiting" ? " WAITING" : ""}] ${text}`, key));
+  void runHook(d, "onReport", { key, text, evidence: evidence.join(" ") });
+  const head = `[REPORT ${key}${opts.status === "waiting" ? " WAITING" : ""}]`;
+  const tail = evidence.length ? `\n${evidenceLine(evidence)}` : "";
+  return { sent: await settled(tellLead(d, `${head} ${text}${tail}`, key)), progress };
 }
 
 export async function ready(
@@ -100,9 +133,10 @@ export async function ready(
   lane.status = "ready";
   lane.final = { text, evidence: [...evidence], at: now };
   lane.lastActivityAt = now;
+  lane.progressAt = now;
   lane.log.push({ at: now, kind: "ready", text });
   d.store.saveLane(lane);
-  const sent = await settled(tellLead(d, `[READY ${key}] ${text}\nevidence: ${evidence.join(" ")}`, key));
+  const sent = await settled(tellLead(d, `[READY ${key}] ${text}\n${evidenceLine(evidence)}`, key));
   void runHook(d, "onReady", { key, text, evidence: evidence.join(" ") });
   d.usage.record({
     name: "dori.lane_ready",

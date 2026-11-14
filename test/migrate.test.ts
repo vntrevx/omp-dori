@@ -132,6 +132,16 @@ describe("dori migrate: one lane herdr -> hc", () => {
     expect(d.store.queued(newRef)[1]!.attempt?.state).toBe("ambiguous");
   });
 
+  test("an entry whose id was recorded as delivered stays delivered after the move; its id moves too", async () => {
+    const { d, opts } = migrateWorld();
+    // A pass that recorded the notice as delivered was stopped before it rewrote the old queue.
+    d.store.saveInbox(OLD, [{ ...msg("nudge", 1), id: "nudge:k:1:1" }, msg("one", 2)]);
+    writeFileSync(`${d.store.inboxPath(OLD)}.ids`, "nudge:k:1:1\n");
+    expect(await migrate(d, { lane: "k" }, opts())).toBe(0);
+    expect(d.store.queued(NEW).map((m) => m.text)).toEqual(["one"]);
+    expect(d.store.enqueueOnce(NEW, { at: 3, from: "duty", text: "nudge", id: "nudge:k:1:1" })).toBe(false);
+  });
+
   test("--dry-run prints the plan and writes nothing", async () => {
     const { w, d, lines, opts } = migrateWorld();
     d.store.saveInbox(OLD, [msg("one", 1)]);

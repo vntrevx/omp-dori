@@ -51,6 +51,17 @@ describe("a forwarded inbox (.forward marker)", () => {
     expect(existsSync(`${old}.merging`)).toBe(false);
   });
 
+  test("an old-path entry whose id was recorded as delivered is not merged; the id moves with the merge", async () => {
+    const { w, d, old, oldWriter } = setup();
+    // A pass that recorded the notice as delivered was stopped before it rewrote the old queue.
+    oldWriter({ ...m("[LOST k] gone", 1), id: "lost:k:1" } as ReturnType<typeof m>);
+    oldWriter(m("still due", 2));
+    writeFileSync(`${old}.ids`, "lost:k:1\n");
+    expect(await flushInbox(d, NEW)).toBe("delivered");
+    expect(w.hc.sent.map((x) => x.text)).toEqual(["still due"]);
+    expect(d.store.enqueueOnce(NEW, { at: 3, from: "duty", text: "[LOST k] gone", id: "lost:k:1" })).toBe(false);
+  });
+
   test("inbox list <old ref> shows the moved entries plus those still at the old path, merged once", () => {
     const { d, old, oldWriter } = setup("working");
     d.store.saveInbox(NEW, [m("moved", 1)]);
