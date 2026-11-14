@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { utimesSync, writeFileSync } from "node:fs";
+import { utimesSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import { dutyTick } from "../src/duty.ts";
 import { ready, report, startLane } from "../src/lanes.ts";
+import { href } from "./fake.ts";
 import { setup } from "./harness-setup.ts";
 import { captureIo } from "./inbox-setup.ts";
 
@@ -94,6 +95,31 @@ describe("the progress clock", () => {
     d.store.saveLane(old);
     expect((await at(69)).map((e) => e.action)).not.toContain("escalated");
     expect(await at(70)).toContainEqual({ lane: "talker", action: "escalated" });
+  });
+
+  test("a record from before the clock is not moved by a report without evidence, so repeating it cannot dodge escalation", async () => {
+    const { w, d, lane, at } = await quietLane();
+    const old = d.store.lane("talker")!;
+    delete old.progressAt;
+    d.store.saveLane(old);
+    for (const min of [15, 30, 39]) {
+      w.clock = lane.createdAt + min * MIN;
+      await report(d, "talker", `still going ${min}`);
+      expect(d.store.lane("talker")!.progressAt).toBe(lane.createdAt);
+    }
+    expect(await at(40)).toContainEqual({ lane: "talker", action: "escalated" });
+  });
+
+  test("an escalation with no lead registered is not marked told; it reaches the lead once one is registered", async () => {
+    const { d, lead, at } = await quietLane();
+    rmSync(join(d.store.root, "roles.json"));
+    expect(await at(40)).toContainEqual(expect.objectContaining({ lane: "talker", action: "escalate-no-lead" }));
+    expect(d.store.lane("talker")!.escalatedAt).toBeUndefined();
+    d.store.setRole("lead", href("w1:p1"));
+    expect(await at(41)).toContainEqual({ lane: "talker", action: "escalated" });
+    expect(lead.received.at(-1)).toContain("[ESCALATE talker] no new evidence for 41m");
+    expect(d.store.lane("talker")!.log.at(-1)).toMatchObject({ kind: "escalate", text: lead.received.at(-1) });
+    expect((await at(42)).map((e) => e.action)).not.toContain("escalated");
   });
 
   test("dori report prints whether the clock moved and why not", async () => {

@@ -73,11 +73,20 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       if (lane.status === "waiting") continue;
       // The lead hears of a stall whatever the pane is doing: a lane can be busy, blocked or chatty without progress.
       if (stalled(lane, now)) {
+        // The stall counts as told once the message is in the lead's inbox: from there the inbox delivers it whatever
+        // this flush does. With no lead registered nothing is queued or marked, and the next pass tries again.
+        const leadRef = d.store.roles().lead;
+        if (!leadRef) {
+          events.push({ lane: lane.key, action: "escalate-no-lead", detail: "no lead registered; told once one is" });
+          continue;
+        }
+        const msg = escalation(lane, st, now);
+        d.store.enqueue(leadRef, { at: now, from: "duty", text: msg });
         lane.escalatedAt = now;
-        lane.log.push({ at: now, kind: "escalate", text: `no new evidence since ${hhmm(progressOf(lane))}` });
+        lane.log.push({ at: now, kind: "escalate", text: msg });
         d.store.saveLane(lane);
-        await tellLead(d, escalation(lane, st, now), "duty");
         events.push({ lane: lane.key, action: "escalated" });
+        await flushInbox(d, leadRef);
         continue;
       }
       if (st === "working" || st === "blocked" || st === "error") continue;

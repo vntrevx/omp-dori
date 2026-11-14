@@ -85,9 +85,11 @@ export async function report(
   const lane = openLane(d, key);
   const now = d.now();
   const evidence = opts.evidence ?? [];
+  // The clock is read before this report joins the log: a record from before the clock falls back to its last report,
+  // and that fallback must not count the report being judged (a lane could otherwise talk its way out of a stall).
+  const progress = applyEvidence(lane, evidence, now);
   lane.log.push({ at: now, kind: "report", text: evidence.length ? `${text}\nevidence: ${evidence.join(" ")}` : text });
   lane.lastActivityAt = now;
-  const progress = applyEvidence(lane, evidence, now);
   if (opts.status) lane.status = opts.status;
   d.store.saveLane(lane);
   void runHook(d, "onReport", { key, text, evidence: evidence.join(" ") });
