@@ -1,7 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { readPaneState } from "../../skills/dori-mode/scripts/src/lane-state.ts";
-import type { HerdrCli } from "../runtime/herdr/exec.ts";
-import { probe } from "../runtime/herdr/probe.ts";
+import type { DeploymentCli } from "./deployment-cli.ts";
 import { attestMonitorForeground } from "./deployment-monitor-receipts.ts";
 import { DeploymentBusy, DeploymentHeld, sameProcess, underProcess } from "./deployment-process.ts";
 import type { DeploymentConfig, DeploymentRecord, RuntimeIdentity } from "./deployment-types.ts";
@@ -21,9 +20,10 @@ function emptyNativeInput(screen: string): boolean {
 }
 
 /** A failed acknowledgement cannot disprove delivery; the caller must still observe exit and the bare shell. */
-export async function requestNativeUiExit(cli: HerdrCli, pane: string): Promise<DeploymentHeld | undefined> {
+export async function requestNativeUiExit(cli: DeploymentCli, pane: string): Promise<DeploymentHeld | undefined> {
+  if (!cli.nativeUi) throw new DeploymentHeld("native UI stop requires Linux herdr screen and exit support");
   try {
-    await cli.call(["pane", "send-keys", pane, "ctrl+d"]);
+    await cli.nativeUi.exit(pane);
     return undefined;
   } catch {
     return new DeploymentHeld("native UI exit acknowledgement is unavailable and exit remains unobserved");
@@ -40,12 +40,13 @@ export function holdPendingNativeUiExit(record: DeploymentRecord): boolean {
 /** Reobserve immediately before the durable one-shot request; this never interrupts a working actor. */
 export async function assertNativeUiIdle(
   config: DeploymentConfig,
-  cli: HerdrCli,
+  cli: DeploymentCli,
   record: DeploymentRecord,
   expected: RuntimeIdentity,
 ): Promise<void> {
-  const current = await probe(cli, config.pane, false, "deployment held", config.stateDir);
-  const screen = await cli.read(config.pane, 30);
+  if (!cli.nativeUi) throw new DeploymentHeld("native UI stop requires Linux herdr screen and exit support");
+  const current = await cli.probe(config.pane, "deployment held", config.stateDir);
+  const screen = await cli.nativeUi.read(config.pane, 30);
   const group = (pid: number): number => {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
     return Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[2]);

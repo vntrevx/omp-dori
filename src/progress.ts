@@ -24,7 +24,9 @@ function counted(lane: Lane, ref: string, since: number): { why: string } | { mt
   if (LINK_RE.test(ref)) return lane.evidenceSeen?.includes(ref) ? { why: "reported before" } : { mtime: 0 };
   let mtime: number;
   try {
-    mtime = statSync(resolve(ref)).mtimeMs;
+    const file = statSync(resolve(ref));
+    if (!file.isFile()) return { why: "not a regular file" };
+    mtime = file.mtimeMs;
   } catch {
     return { why: "no such file" };
   }
@@ -35,8 +37,8 @@ function counted(lane: Lane, ref: string, since: number): { why: string } | { mt
 }
 
 /**
- * Applies a report's evidence to the lane record (the caller saves it). New evidence moves the clock to `now` and clears
- * the nudge count; anything else leaves both alone. Returns the lines the CLI prints, the first one starting PROGRESS.
+ * Applies a report's evidence to the lane record (the caller saves it). New evidence starts a progress epoch at `now`,
+ * clearing its nudge count and escalation marker; anything else leaves them alone. Returns the CLI's PROGRESS lines.
  */
 export function applyEvidence(lane: Lane, evidence: readonly string[], now: number): string[] {
   const since = progressOf(lane);
@@ -60,25 +62,19 @@ export function applyEvidence(lane: Lane, evidence: readonly string[], now: numb
     ];
   lane.progressAt = now;
   lane.nudges = 0;
+  delete lane.escalatedAt;
   lane.lastEvidence = { ref: moved, at: now };
   return [`PROGRESS ${hhmm(now)}: ${fitStart(oneLine(moved), 80)}`, ...skipped];
 }
 
 /**
- * When the lead was last told this lane made no progress. A record from before `escalatedAt` was told at its third nudge:
- * the duty loop before the progress clock escalated there (this one nudges twice), so it is not told a second time.
- */
-const escalatedOf = (lane: Lane): number | undefined =>
-  lane.escalatedAt ?? (lane.nudges >= 3 ? lane.log.findLast((e) => e.kind === "nudge")?.at : undefined);
-
-/**
- * True when the lane has gone ESCALATE_MINUTES without progress and the lead has not been told about this stall. An
- * escalation is always at least ESCALATE_MINUTES after the progress it is about, so one at or before `progressOf` was
- * about an earlier stall (progress made in the same instant as the escalation starts a new one).
+ * True when this progress epoch has stalled without a queued escalation. Older binaries could retain a marker at or
+ * before their latest progress; that marker belongs to an earlier epoch. New evidence and READY explicitly clear it,
+ * including after clock rollback. Legacy nudge counts prove no delivery: one renewed alert establishes a marker.
  */
 export const stalled = (lane: Lane, now: number): boolean => {
-  const told = escalatedOf(lane);
-  return now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 && (told === undefined || told <= progressOf(lane));
+  const since = progressOf(lane);
+  return now - since >= ESCALATE_MINUTES * 60_000 && (lane.escalatedAt === undefined || lane.escalatedAt <= since);
 };
 
 /** A blocker named in report text: its first line (a CR or line separator ends one too) without a leading `WAITING:`. */

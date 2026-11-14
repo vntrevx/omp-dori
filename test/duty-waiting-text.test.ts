@@ -39,6 +39,7 @@ describe("a waiting lane's target and start", () => {
       waitingSince: lane.createdAt,
       waitingFor: "CI on acme/app#3",
     });
+    expect(lead.received.at(-1)).toBe("[REPORT blocked WAITING] STUCK: no log for 15m");
     await at(40);
     expect(lead.received.at(-1)!.split("\n")[1]).toBe(`waiting on CI on acme/app#3 since ${hhmm(lane.createdAt)}`);
   });
@@ -55,6 +56,7 @@ describe("a waiting lane's target and start", () => {
       waitingSince: lane.createdAt,
       waitingFor: "CI on acme/app#3",
     });
+    expect(lead.received.at(-1)).toBe(`[REPORT blocked WAITING] CI retried\nevidence: ${log}`);
     expect(await at(70)).toContainEqual({ lane: "blocked", action: "escalated" });
     expect(lead.received.at(-1)!.split("\n")[1]).toBe(`waiting on CI on acme/app#3 since ${hhmm(lane.createdAt)}`);
   });

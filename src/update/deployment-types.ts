@@ -11,8 +11,12 @@ export type DeploymentConfig = {
   readonly bun: string;
   readonly omp: string;
   readonly legacyOmp?: string;
-  readonly herdr: string;
+  /** Absent runtime remains herdr and retains legacy journal hashes; hc opts into its own binary and terminal. */
+  readonly runtime?: "herdr" | "hc";
+  readonly herdr?: string;
   readonly herdrSession?: string;
+  readonly hc?: string;
+  readonly hcSession?: string;
   readonly pane: string;
   readonly sessionId: string;
   readonly model: string;

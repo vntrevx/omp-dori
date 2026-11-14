@@ -98,18 +98,59 @@ describe("records written before runtimes existed (IS-3)", () => {
     expect(out.replace(/\n(?!RUNTIME|lead=)/g, "")).toContain(join(root, "config.json"));
   });
 
-  test("a lane the duty loop before the progress clock escalated at its third nudge is not escalated again", async () => {
+  test.each([2, 3])("a legacy record with %s nudges establishes one verifiable queued escalation", async (nudges) => {
     const { w, d } = oldHome();
     rmSync(join(d.store.root, "lanes", "no-tab.json"));
-    w.addPane("w1:p1", "idle");
+    const lead = w.addPane("w1:p1", "working");
     w.addPane("w1:p3", "idle");
     const nudge = (at: number) => ({ at, kind: "nudge" as const, text: "idle" });
-    const told = { ...d.store.lane("old-lane")!, nudges: 3, log: [nudge(10 * MIN), nudge(20 * MIN), nudge(40 * MIN)] };
-    d.store.saveLane(told);
+    const legacy = {
+      ...d.store.lane("old-lane")!,
+      nudges,
+      log: [nudge(10 * MIN), nudge(20 * MIN), nudge(40 * MIN)].slice(0, nudges),
+    };
+    d.store.saveLane(legacy);
     w.clock = 90 * MIN;
-    expect(await dutyTick(d)).toEqual([]);
-    // Two nudges: the old loop had not told the lead yet, so this stall is escalated now.
-    d.store.saveLane({ ...told, nudges: 2 });
     expect(await dutyTick(d)).toEqual([{ lane: "old-lane", action: "escalated" }]);
+    expect(d.store.lane("old-lane")!.escalatedAt).toBe(w.clock);
+    expect(d.store.queued(legacy.sessionRef)).toEqual([]);
+    const leadRef = { runtime: "herdr" as const, id: "w1:p1" };
+    expect(d.store.queued(leadRef)).toEqual([
+      expect.objectContaining({ at: w.clock, from: "duty", text: expect.stringContaining("[ESCALATE old-lane]") }),
+    ]);
+    w.clock += MIN;
+    expect(await dutyTick(d)).toEqual([]);
+    expect(d.store.queued(leadRef)).toHaveLength(1);
+    lead.status = "idle";
+    expect(await dutyTick(d)).toEqual([{ pane: "w1:p1", action: "flushed" }]);
+    expect(lead.received.filter((text) => text.includes("[ESCALATE old-lane]"))).toHaveLength(1);
+    expect(d.store.queued(leadRef)).toEqual([]);
+  });
+
+  test("a legacy third nudge without a lead is not marked until one escalation can be queued", async () => {
+    const { w, d } = oldHome();
+    rmSync(join(d.store.root, "lanes", "no-tab.json"));
+    rmSync(join(d.store.root, "roles.json"));
+    const lead = w.addPane("w1:p1", "working");
+    w.addPane("w1:p3", "idle");
+    const legacy = d.store.lane("old-lane")!;
+    legacy.nudges = 3;
+    legacy.log = [10, 20, 40].map((min) => ({ at: min * MIN, kind: "nudge" as const, text: "idle" }));
+    d.store.saveLane(legacy);
+    w.clock = 90 * MIN;
+    expect(await dutyTick(d)).toEqual([expect.objectContaining({ lane: "old-lane", action: "escalate-no-lead" })]);
+    expect(d.store.lane("old-lane")!.escalatedAt).toBeUndefined();
+    expect(d.store.lane("old-lane")!.log.some((entry) => entry.kind === "escalate")).toBe(false);
+    const leadRef = { runtime: "herdr" as const, id: "w1:p1" };
+    expect(d.store.queued(leadRef)).toEqual([]);
+    d.store.setRole("lead", leadRef);
+    expect(await dutyTick(d)).toEqual([{ lane: "old-lane", action: "escalated" }]);
+    expect(d.store.lane("old-lane")!.escalatedAt).toBe(w.clock);
+    expect(d.store.queued(leadRef)).toHaveLength(1);
+    expect(await dutyTick(d)).toEqual([]);
+    expect(d.store.queued(leadRef)).toHaveLength(1);
+    lead.status = "idle";
+    await dutyTick(d);
+    expect(lead.received.filter((text) => text.includes("[ESCALATE old-lane]"))).toHaveLength(1);
   });
 });

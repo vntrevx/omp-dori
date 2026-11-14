@@ -15,6 +15,10 @@ const below = (root: string, path: string): boolean => {
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 };
 
+/** The configured runtime's own binary. */
+export const runtimeBinary = (config: DeploymentConfig): string =>
+  (config.runtime === "hc" ? config.hc : config.herdr) ?? fail(config.runtime ?? "herdr");
+
 /** Keep lexical paths stable when liveSource changes from a directory to a release symlink. */
 export function parseDeploymentConfig(value: unknown, configDir: string): DeploymentConfig {
   if (!object(value)) return fail("config");
@@ -27,7 +31,6 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     "stateDir",
     "bun",
     "omp",
-    "herdr",
     "pane",
     "sessionId",
     "model",
@@ -43,8 +46,16 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     "monitorBootstrapFile",
     "quiesceCheckpointFile",
     "shims",
+    "runtime",
+    "herdr",
     "herdrSession",
+    "hc",
+    "hcSession",
   ]);
+  const runtime = value["runtime"] ?? "herdr";
+  if (runtime !== "herdr" && runtime !== "hc") return fail("runtime");
+  const other = runtime === "herdr" ? ["hc", "hcSession"] : ["herdr", "herdrSession"];
+  if (value[runtime] === undefined || other.some((key) => value[key] !== undefined)) return fail(runtime);
   if (Object.keys(value).some((key) => !allowed.has(key))) return fail("unknown setting");
   const rawStopMode = value["nativeStopMode"];
   const nativeStopMode = Object.hasOwn(value, "nativeStopMode")
@@ -80,7 +91,8 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     stateDir: path("stateDir"),
     bun: path("bun"),
     omp: path("omp"),
-    herdr: path("herdr"),
+    ...(runtime === "hc" ? { runtime } : {}),
+    ...(runtime === "herdr" ? { herdr: path("herdr") } : { hc: path("hc") }),
     pane: text(value["pane"], "pane"),
     sessionId: text(value["sessionId"], "sessionId"),
     model: text(value["model"], "model"),
@@ -90,12 +102,14 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     stopTimeoutMs: ms("stopTimeoutMs", 15_000),
     ...(value["legacyOmp"] === undefined ? {} : { legacyOmp: path("legacyOmp") }),
     ...(value["herdrSession"] === undefined ? {} : { herdrSession: text(value["herdrSession"], "herdrSession") }),
+    ...(value["hcSession"] === undefined ? {} : { hcSession: text(value["hcSession"], "hcSession") }),
     ...(value["monitorBootstrapFile"] === undefined ? {} : { monitorBootstrapFile: path("monitorBootstrapFile") }),
     ...(value["quiesceCheckpointFile"] === undefined ? {} : { quiesceCheckpointFile: path("quiesceCheckpointFile") }),
     ...(nativeStopMode === undefined ? {} : { nativeStopMode }),
     shims: [],
   };
-  if (!/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(config.pane)) return fail("pane");
+  if (!(runtime === "herdr" ? /^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/ : /^t[0-9a-z]+$/).test(config.pane))
+    return fail("pane");
   if (!/^[A-Za-z0-9_-]+$/.test(config.sessionId)) return fail("sessionId");
   if (!/^[A-Za-z0-9_.:-]+\/[A-Za-z0-9_.:/-]+$/.test(config.model)) return fail("model");
   if (
@@ -128,7 +142,7 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     config.doriConfig,
     config.bun,
     config.omp,
-    config.herdr,
+    runtimeBinary(config),
     ...(config.legacyOmp ? [config.legacyOmp] : []),
     resolve(config.home, ".bun/bin/bun"),
     resolve(config.home, ".bun/bin/omp"),

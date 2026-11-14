@@ -89,29 +89,27 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
         await flushInbox(d, leadRef);
         continue;
       }
+      // Older binaries could retain a prior epoch's marker; only this epoch's queued alert ends nudges.
+      if (lane.escalatedAt !== undefined && lane.escalatedAt > progressOf(lane)) continue;
       if (st === "working" || st === "blocked" || st === "error") continue;
       // Nudges answer silence: any report or a working pane restarts the quiet time, but only progress resets the count.
       const quietMin = (now - Math.max(progressOf(lane), lane.lastActivityAt)) / 60_000;
       const due = NUDGE_MINUTES[lane.nudges];
       if (due === undefined || quietMin < due) continue;
+      const since = progressOf(lane);
+      const waiting = lane.status === "waiting";
+      const text = prompt(waiting ? "nudge-waiting.md" : "nudge.md", {
+        key: lane.key,
+        minutes: String(Math.floor(quietMin)),
+        since: hhmm(since),
+        age: ageText(now - since),
+        dori: d.doriCmd,
+        ...(waiting ? { target: waitingOn(lane), waitingSince: hhmm(waitingSinceOf(lane)) } : {}),
+      });
       lane.nudges += 1;
       lane.log.push({ at: now, kind: "nudge", text: `idle ${Math.floor(quietMin)} min` });
       d.store.saveLane(lane);
-      const since = progressOf(lane);
-      const waiting = lane.status === "waiting";
-      await sendOrThrow(
-        d,
-        lane.key,
-        prompt(waiting ? "nudge-waiting.md" : "nudge.md", {
-          key: lane.key,
-          minutes: String(Math.floor(quietMin)),
-          since: hhmm(since),
-          age: ageText(now - since),
-          dori: d.doriCmd,
-          ...(waiting ? { target: waitingOn(lane), waitingSince: hhmm(waitingSinceOf(lane)) } : {}),
-        }),
-        "duty",
-      );
+      await sendOrThrow(d, lane.key, text, "duty");
       events.push({ lane: lane.key, action: `nudge-${lane.nudges}` });
     } catch (e) {
       // One lane's failed status read or delivery must not end the loop for the other lanes.

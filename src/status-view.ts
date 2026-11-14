@@ -9,6 +9,7 @@ export const WIDTH = 120;
 
 /** Columns the progress field and the start of the last entry need beside a lane's name; fewer moves them below it. */
 const BODY_MIN = 40;
+const WAITING_BODY_MIN = 24 + Bun.stringWidth("waiting: … since 00:00");
 
 /**
  * `<last entry>` for a working lane; a waiting lane's `waiting: <target> since HH:MM | <last entry>`, the target cut
@@ -27,7 +28,7 @@ function tailOf(l: Lane, cols: number): string {
 /**
  * `key  status  runtime  ref  progress <age> (<since>)  <tail>`. The key and the ref are never cut (keys share
  * prefixes, and a cut one names no lane a command can take): their columns are as wide as the widest open lane's, and
- * the rest is cut to the line. When they leave less than BODY_MIN columns, the rest goes on an indented line below.
+ * the rest is cut to the line. When the progress field and waiting timestamp cannot fit, the rest moves below.
  */
 function laneLine(l: Lane, now: number, cols: { key: number; ref: number }): string[] {
   const since = progressOf(l);
@@ -40,7 +41,7 @@ function laneLine(l: Lane, now: number, cols: { key: number; ref: number }): str
   const progress = padCols(`progress ${ageText(now - since)} (${hhmm(since)})`, 23);
   const body = (room: number) => fitEnd(`${progress} ${tailOf(l, room - 24)}`.trimEnd(), room);
   const room = WIDTH - Bun.stringWidth(id) - 1;
-  if (room >= BODY_MIN) return [`${id} ${body(room)}`];
+  if (room >= (l.status === "waiting" ? WAITING_BODY_MIN : BODY_MIN)) return [`${id} ${body(room)}`];
   return [...wrap(id.trimEnd(), WIDTH), `  ${body(WIDTH - 2)}`];
 }
 

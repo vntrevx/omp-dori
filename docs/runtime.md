@@ -172,7 +172,9 @@ The two loops are plain processes with no inbox and no agent, so they skip steps
 }
 ```
 
-`onReady` runs on `dori harness ready`, `onReport` on `dori harness report`, and `onLost` when the duty loop finds a vanished session. `{key}`, `{text}` and `{evidence}` are replaced inside each argv element. Hooks run in the background; failure logs one stderr line without failing the command. `reviewCommand` replaces the built-in OMP reviewer in `dori harness review`, receives `{pr}`, `{repo}`, `{number}`, `{sha}` and `{text}` (the rendered prompt), and must print `VERDICT: CLEAR` or `VERDICT: BLOCK`. `DORI_PROMPTS_DIR` replaces the repo's `prompts/` directory.
+`onReady` runs on `dori harness ready`, `onReport` on `dori harness report`, and `onLost` when the duty loop finds a vanished session. `{key}`, `{text}` and `{evidence}` are replaced inside each argv element. Hooks run in the background; failure logs one stderr line without failing the command. `reviewCommand` replaces the built-in OMP reviewer in `dori harness review`, receives `{pr}`, `{repo}`, `{number}`, `{sha}` and `{text}` (the rendered prompt), and must print `VERDICT: CLEAR` or `VERDICT: BLOCK`.
+
+`DORI_PROMPTS_DIR` replaces the complete repo `prompts/` directory; missing files never fall back to repo prompts. When cutting over to waiting-lane supervision, add the required `nudge-waiting.md` alongside `duty.md`, `lane-footer.md`, `lead.md`, `nudge.md` and `review.md`, and restart the long-lived duty process with the matching CLI source. Duty reads the selected nudge prompt before recording a nudge, so a missing or unreadable override reports `lane-failed` without consuming that nudge.
 
 ## Candidate command deadlines
 

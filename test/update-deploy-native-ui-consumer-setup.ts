@@ -1,6 +1,7 @@
 import { readFileSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
+import { runtimeBinary } from "../src/update/deployment-config.ts";
 import { digest } from "../src/update/source.ts";
 import { managedBashFixture } from "./update-deploy-managed-setup.ts";
 
@@ -10,7 +11,8 @@ export async function nativeUiConsumerFixture(outcome: "delayed" | "late" | "und
   const config = {
     ...f.config,
     nativeStopMode: "ui" as const,
-    stopTimeoutMs: outcome === "delayed" ? 2_000 : 100,
+    // These consumers test durable holds and resume, not a 100 ms subprocess-observer speed limit.
+    stopTimeoutMs: outcome === "delayed" ? 2_000 : 1_000,
     healthTimeoutMs: 2_000,
   };
   const healthPath = join(config.stateDir, "runtime", `${encodeURIComponent(config.pane)}.json`);
@@ -64,7 +66,7 @@ writePaneState(${JSON.stringify(config.stateDir)}, { ...processIdentity(process.
     handled = pending.length;
   });
   writeFileSync(
-    config.herdr,
+    runtimeBinary(config),
     `#!${process.execPath}
 import { appendFileSync, readFileSync } from "node:fs";
 import { readPaneState } from ${JSON.stringify(modules.state)};

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import { dutyTick } from "../src/duty.ts";
@@ -75,12 +75,13 @@ describe("a waiting lane", () => {
   });
 
   test("going back to working clears the target", async () => {
-    const { d } = await waitingLane({ waitingFor: "CI" });
+    const { d, lead } = await waitingLane({ waitingFor: "CI" });
     await report(d, "blocked", "CI green, back on it", { status: "working" });
     const lane = d.store.lane("blocked")!;
     expect(lane.status).toBe("working");
     expect(lane.waitingFor).toBeUndefined();
     expect(lane.waitingSince).toBeUndefined();
+    expect(lead.received.at(-1)).toBe("[REPORT blocked] CI green, back on it");
   });
 
   test("a record from before --for waits since its last progress", async () => {
@@ -143,4 +144,34 @@ describe("a waiting lane", () => {
     expect(await at(40)).toContainEqual({ lane: "blocked", action: "escalated" });
     expect(pane.received.filter((m) => m.startsWith("[duty"))).toEqual([]);
   });
+
+  test.each(["missing", "directory"])(
+    "a %s waiting prompt does not consume a nudge and can be repaired before the next tick",
+    async (kind) => {
+      const { d, lane, pane, at } = await waitingLane({ waitingFor: "CI" });
+      const dir = join(d.store.root, "custom-prompts");
+      const path = join(dir, "nudge-waiting.md");
+      mkdirSync(dir);
+      if (kind === "directory") mkdirSync(path);
+      const before = d.store.lane("blocked");
+      const previous = process.env["DORI_PROMPTS_DIR"];
+      process.env["DORI_PROMPTS_DIR"] = dir;
+      try {
+        expect(await at(10)).toEqual([
+          expect.objectContaining({ lane: "blocked", action: "lane-failed", detail: expect.any(String) }),
+        ]);
+        expect(d.store.lane("blocked")).toEqual(before);
+        expect(pane.received.filter((text) => text.startsWith("[duty -> blocked]"))).toEqual([]);
+        rmSync(path, { recursive: true, force: true });
+        writeFileSync(path, "custom waiting check {{key}}: {{target}} since {{waitingSince}}");
+        expect(await at(10)).toContainEqual({ lane: "blocked", action: "nudge-1" });
+        expect(d.store.lane("blocked")!.nudges).toBe(1);
+        expect(d.store.lane("blocked")!.log.filter((entry) => entry.kind === "nudge")).toHaveLength(1);
+        expect(pane.received.at(-1)).toBe(`custom waiting check blocked: CI since ${hhmm(lane.createdAt)}`);
+      } finally {
+        if (previous === undefined) delete process.env["DORI_PROMPTS_DIR"];
+        else process.env["DORI_PROMPTS_DIR"] = previous;
+      }
+    },
+  );
 });

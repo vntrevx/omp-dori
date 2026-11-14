@@ -112,7 +112,7 @@ export async function report(
   if (opts.status) lane.status = opts.status;
   d.store.saveLane(lane);
   void runHook(d, "onReport", { key, text, evidence: evidence.join(" ") });
-  const head = `[REPORT ${key}${opts.status === "waiting" ? " WAITING" : ""}]`;
+  const head = `[REPORT ${key}${lane.status === "waiting" ? " WAITING" : ""}]`;
   const tail = evidence.length ? `\nevidence: ${evidence.join(" ")}` : "";
   return { sent: await settled(tellLead(d, `${head} ${text}${tail}`, key)), progress };
 }
@@ -131,6 +131,8 @@ export async function ready(
   lane.final = { text, evidence: [...evidence], at: now };
   lane.lastActivityAt = now;
   lane.progressAt = now;
+  lane.nudges = 0;
+  delete lane.escalatedAt;
   lane.log.push({ at: now, kind: "ready", text });
   d.store.saveLane(lane);
   const sent = await settled(tellLead(d, `[READY ${key}] ${text}\nevidence: ${evidence.join(" ")}`, key));

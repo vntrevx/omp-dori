@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { HerdrCli } from "../src/runtime/herdr/exec.ts";
+import { herdrDeploymentCli } from "../src/update/deployment-cli.ts";
 import { stopRuntime } from "../src/update/deployment-native.ts";
 import { DeploymentBusy, DeploymentHeld, sameProcess } from "../src/update/deployment-process.ts";
 import { readRestartIntent } from "../src/update/deployment-restart-state.ts";
@@ -36,6 +36,7 @@ linux.each([
   "source",
   "root",
   "foreground",
+  "unsupported",
 ])("opt-in UI stop is idle-only, durable and never falls back to signalling: %s", async (mode) => {
   const f = await managedBashFixture();
   const config = { ...f.config, nativeStopMode: "ui" as const, stopTimeoutMs: mode === "resume" ? 100 : 2_000 };
@@ -81,7 +82,7 @@ linux.each([
   const keys: string[] = [];
   let observations = 0;
   let requestedAt: string | undefined;
-  const cli = new HerdrCli(async (cmd, args) => {
+  const supported = herdrDeploymentCli(async (cmd, args) => {
     if (cmd === "herdr" && args[3] === "process-info" && ++observations === 2) {
       if (mode === "root") f.front.shell_pid = f.bootstrap.running![0]!.pid;
       if (mode === "foreground") f.front.foreground_process_group_id = undefined;
@@ -106,6 +107,8 @@ linux.each([
     }
     return f.cli.exec(cmd, args);
   }, config.herdrSession!);
+  const { nativeUi: _nativeUi, ...withoutUi } = supported;
+  const cli = mode === "unsupported" ? withoutUi : supported;
   const stopping = stopRuntime(config, cli, record, f.persist, mode === "quiesced");
   if (mode === "resume") {
     await expect(stopping).rejects.toThrow();

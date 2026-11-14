@@ -74,10 +74,11 @@ describe("the lane board", () => {
     const b = `lane-${"k".repeat(35)}b`;
     const hc = { ...lane(b, "working", 70), sessionRef: { runtime: "hc" as const, id: "t1b2c3d4e5f6g7h8" } };
     const lines = laneBoard([lane(a, "waiting", 90), hc], NOW);
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0]!.split(" ")[0]).toBe(a);
-    expect(lines[1]!.split(" ")[0]).toBe(b);
-    expect(lines[1]).toContain(" hc:t1b2c3d4e5f6g7h8 ");
+    expect(lines[1]).toContain(`since ${hhmm(NOW - 90 * MIN)}`);
+    expect(lines[2]!.split(" ")[0]).toBe(b);
+    expect(lines[2]).toContain(" hc:t1b2c3d4e5f6g7h8 ");
     for (const line of lines) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(120);
     // Columns too wide for the rest move it below the lane's name; the name, status and ref wrap whole, never cut.
     const wide = { ...lane(a, "working", 5), sessionRef: { runtime: "hc" as const, id: `t${"z".repeat(60)}` } };
@@ -85,6 +86,29 @@ describe("the lane board", () => {
     expect(two).toEqual([`${a} working  hc`, `hc:t${"z".repeat(60)}`, expect.stringMatching(/^ {2}progress 5m /)]);
     for (const line of two) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(120);
   });
+
+  test.each(["CI 812", "ＬＯＮＧ ＴＡＲＧＥＴ ".repeat(8)])(
+    "a 41-character key and 22-column ref keep the waiting clock for target %s",
+    (target) => {
+      const key = `lane-${"k".repeat(36)}`;
+      const id = `t${"z".repeat(18)}`;
+      const waiting = {
+        ...lane(key, "waiting", 45),
+        sessionRef: { runtime: "hc" as const, id },
+        waitingFor: target,
+        waitingSince: NOW - 30 * MIN,
+      };
+      expect(key).toHaveLength(41);
+      expect(Bun.stringWidth(`hc:${id}`)).toBe(22);
+      const lines = laneBoard([waiting], NOW);
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toBe(`${key} waiting  hc    hc:${id}`);
+      expect(lines[1]).toContain("  progress 45m ");
+      expect(lines[1]).toContain("waiting: ");
+      expect(lines[1]).toContain(` since ${hhmm(waiting.waitingSince)}`);
+      for (const line of lines) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(120);
+    },
+  );
 
   test("terminal escapes, carriage returns and bidi overrides in a lane's text stay on its one line as spaces", () => {
     const [line] = laneBoard([lane("esc", "working", 5, "red \u001b[31mALERT\u001b[0m\rover\u202eturn\nnext")], NOW);

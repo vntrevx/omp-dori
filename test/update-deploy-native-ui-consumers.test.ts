@@ -21,10 +21,13 @@ linux.each([
   ["restart", "late"],
   ["release", "undelivered"],
   ["restart", "undelivered"],
+  ["release", "legacy"],
+  ["restart", "legacy"],
 ] as const)(
   "uncertain UI ack stays safe across %s and %s exit",
   async (mode, outcome) => {
-    const f = await nativeUiConsumerFixture(outcome);
+    const legacy = outcome === "legacy";
+    const f = await nativeUiConsumerFixture(legacy ? "undelivered" : outcome);
     try {
       const { config } = f;
       const manifest = sourceManifest(config.liveSource);
@@ -104,7 +107,13 @@ linux.each([
           f.runtime.startedAt,
         );
         expect(sameProcess(f.runtime, stillHealthy)).toBe(true);
-        if (outcome === "undelivered") {
+        if (outcome === "undelivered" || legacy) {
+          if (legacy) {
+            const { runtime: _runtime, ...previousConfig } = config;
+            result = { ...result, configHash: digest(JSON.stringify(previousConfig)) };
+            saveDeploymentJson(f.journal, result);
+            if (mode === "restart") saveRestartIntent(config, result);
+          }
           result = await invoke(result);
           expect(result).toMatchObject({ status: "held", step: "stop", nativeUiExitRequestedAt: requestedAt });
           expect(sameProcess(f.runtime)).toBe(true);
