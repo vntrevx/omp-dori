@@ -33,6 +33,27 @@ export function padCols(text: string, cols: number): string {
   return fitted + " ".repeat(Math.max(0, cols - Bun.stringWidth(fitted)));
 }
 
+/**
+ * `text` on one line: control characters (line breaks and terminal escapes included) and bidi overrides become a space,
+ * and runs of spaces one space, so lane-supplied text cannot break a line, recolour the terminal or add a line of its own.
+ */
+export const oneLine = (text: string): string =>
+  text.replace(/[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069\s]+/gu, " ").trim();
+
+/** `text` broken into lines of at most `cols` columns: at a space when one is in reach, else inside a long word. */
+export function wrap(text: string, cols: number): string[] {
+  const lines: string[] = [];
+  let rest = text;
+  while (Bun.stringWidth(rest) > cols) {
+    const head = keep(graphemes(rest), cols).join("") || graphemes(rest)[0]!;
+    const cut = rest[head.length] === " " ? head.length : head.lastIndexOf(" ");
+    const take = cut > 0 ? head.slice(0, cut) : head;
+    lines.push(take.trimEnd());
+    rest = rest.slice(take.length).trimStart();
+  }
+  return [...lines, rest];
+}
+
 /** Local wall-clock time, "19:47". */
 export function hhmm(at: number): string {
   const t = new Date(at);

@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { status } from "../src/cli-up.ts";
+import { dutyTick } from "../src/duty.ts";
+import { RuntimeChoiceError } from "../src/runtime/select.ts";
 import type { SessionRef } from "../src/runtime/types.ts";
+import { Store } from "../src/store.ts";
 import { World } from "./fake.ts";
 import { captureIo } from "./inbox-setup.ts";
+
+const MIN = 60_000;
 
 // A lanes/<key>.json and a roles.json exactly as a binary from before runtimes existed wrote them.
 const OLD_LANE = {
@@ -72,5 +77,39 @@ describe("records written before runtimes existed (IS-3)", () => {
     expect(lines[0]).toBe("RUNTIME herdr (from config)");
     expect(lines[1]).toStartWith("lead=w1:p1 duty=w1:p2 ");
     expect(lines.find((l) => l.startsWith("old-lane"))).toMatch(/^old-lane\s+working\s+herdr\s+w1:p3\s/);
+  });
+
+  test("dori status with a long home path and an unset runtime keeps every line within 120 columns, nothing cut", async () => {
+    const { d } = oldHome();
+    const root = join(d.store.root, `${"deep-home-directory-".repeat(8)}end`);
+    const long = {
+      ...d,
+      store: new Store(root),
+      choice: () => {
+        throw new RuntimeChoiceError(`neither herdr nor hc is on PATH: set "runtime" in ${join(root, "config.json")}`);
+      },
+    };
+    const { out } = await captureIo(async () => {
+      status(long);
+      return 0;
+    });
+    for (const line of out.split("\n")) expect(Bun.stringWidth(line)).toBeLessThanOrEqual(120);
+    expect(out.replaceAll("\n", "")).toContain(`home=${root}`);
+    expect(out.replace(/\n(?!RUNTIME|lead=)/g, "")).toContain(join(root, "config.json"));
+  });
+
+  test("a lane the duty loop before the progress clock escalated at its third nudge is not escalated again", async () => {
+    const { w, d } = oldHome();
+    rmSync(join(d.store.root, "lanes", "no-tab.json"));
+    w.addPane("w1:p1", "idle");
+    w.addPane("w1:p3", "idle");
+    const nudge = (at: number) => ({ at, kind: "nudge" as const, text: "idle" });
+    const told = { ...d.store.lane("old-lane")!, nudges: 3, log: [nudge(10 * MIN), nudge(20 * MIN), nudge(40 * MIN)] };
+    d.store.saveLane(told);
+    w.clock = 90 * MIN;
+    expect(await dutyTick(d)).toEqual([]);
+    // Two nudges: the old loop had not told the lead yet, so this stall is escalated now.
+    d.store.saveLane({ ...told, nudges: 2 });
+    expect(await dutyTick(d)).toEqual([{ lane: "old-lane", action: "escalated" }]);
   });
 });

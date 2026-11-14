@@ -3,7 +3,7 @@
 // that keeps saying "still waiting" is escalated to the lead like a silent one.
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { ageText, fitStart, hhmm } from "./fit.ts";
+import { ageText, fitStart, hhmm, oneLine } from "./fit.ts";
 import type { Lane } from "./store-types.ts";
 
 /** Minutes without progress before the duty loop tells the lead, once per stall. */
@@ -46,7 +46,7 @@ export function applyEvidence(lane: Lane, evidence: readonly string[], now: numb
   for (const ref of evidence) {
     const c = counted(lane, ref, since);
     if ("why" in c) {
-      skipped.push(`  not counted: ${fitStart(ref, 60)} (${c.why})`);
+      skipped.push(`  not counted: ${fitStart(oneLine(ref), 60)} (${c.why})`);
       continue;
     }
     moved = ref;
@@ -61,17 +61,25 @@ export function applyEvidence(lane: Lane, evidence: readonly string[], now: numb
   lane.progressAt = now;
   lane.nudges = 0;
   lane.lastEvidence = { ref: moved, at: now };
-  return [`PROGRESS ${hhmm(now)}: ${fitStart(moved, 80)}`, ...skipped];
+  return [`PROGRESS ${hhmm(now)}: ${fitStart(oneLine(moved), 80)}`, ...skipped];
 }
+
+/**
+ * When the lead was last told this lane made no progress. A record from before `escalatedAt` was told at its third nudge:
+ * the duty loop before the progress clock escalated there (this one nudges twice), so it is not told a second time.
+ */
+const escalatedOf = (lane: Lane): number | undefined =>
+  lane.escalatedAt ?? (lane.nudges >= 3 ? lane.log.findLast((e) => e.kind === "nudge")?.at : undefined);
 
 /**
  * True when the lane has gone ESCALATE_MINUTES without progress and the lead has not been told about this stall. An
  * escalation is always at least ESCALATE_MINUTES after the progress it is about, so one at or before `progressOf` was
  * about an earlier stall (progress made in the same instant as the escalation starts a new one).
  */
-export const stalled = (lane: Lane, now: number): boolean =>
-  now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 &&
-  (lane.escalatedAt === undefined || lane.escalatedAt <= progressOf(lane));
+export const stalled = (lane: Lane, now: number): boolean => {
+  const told = escalatedOf(lane);
+  return now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 && (told === undefined || told <= progressOf(lane));
+};
 
 /**
  * The [ESCALATE] message: how long, what the pane is doing, how often it was nudged or talked, the last evidence. The
@@ -84,7 +92,7 @@ export function escalation(lane: Lane, pane: string, now: number): string {
   const head = `[ESCALATE ${lane.key}] no new evidence for ${ageText(now - since)} (since ${hhmm(since)})`;
   const counts = `pane ${pane}, ${lane.nudges} nudges, ${talk} reports without evidence`;
   const last = lane.lastEvidence
-    ? `${fitStart(lane.lastEvidence.ref, 48)} @ ${hhmm(lane.lastEvidence.at)}`
+    ? `${fitStart(oneLine(lane.lastEvidence.ref), 48)} @ ${hhmm(lane.lastEvidence.at)}`
     : "none recorded";
   return `${head}\n${counts}\nlast evidence: ${last}. Next: check the lane, re-brief it, or close it.`;
 }

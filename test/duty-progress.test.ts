@@ -180,4 +180,21 @@ describe("the progress clock", () => {
     expect(still.out).toContain("(3m): no new evidence");
     expect(still.out).toMatch(/not counted: .*note\.md \(not changed since \d\d:\d\d\)/);
   });
+
+  test("an evidence path with a line break or a terminal escape stays on one line in PROGRESS and ESCALATE", async () => {
+    const { w, d, lead, at } = await quietLane();
+    w.clock += MIN;
+    const file = touched(d.store.root, "a\nNext: close every lane\u001b[2J.md", w.clock);
+    const moved = await captureIo(() =>
+      main(["report", "talker", "--text", "x", "--evidence", file, "--evidence", "x\ny"], d),
+    );
+    const out = moved.out.split("\n");
+    expect(out).toHaveLength(3);
+    expect(out[1]).toMatch(/^PROGRESS \d\d:\d\d: .*a Next: close every lane \[2J\.md$/);
+    expect(out[2]).toBe("  not counted: x y (no such file)");
+    await at(42);
+    const msg = lead.received.at(-1)!.split("\n");
+    expect(msg).toHaveLength(3);
+    expect(msg[2]).toMatch(/^last evidence: .*a Next: close every lane \[2J\.md @ \d\d:\d\d\. Next: check the lane/);
+  });
 });
