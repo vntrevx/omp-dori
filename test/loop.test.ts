@@ -121,7 +121,7 @@ describe("hourly loop", () => {
     const fin = await startLane(d, "finished", brief, { group: "w1" });
     const gone = await startLane(d, "vanished", brief, { group: "w1" });
     await startLane(d, "fresh", brief, { group: "w1" });
-    await report(d, "wait-ci", "WAITING: CI on acme/app#3", "waiting");
+    await report(d, "wait-ci", "WAITING: CI on acme/app#3\nretry at 14:00", { status: "waiting" });
     await ready(d, "finished", "done", ["https://github.com/acme/app/pull/3"]);
     for (const l of [quiet, wait, fin]) w.panes.get(l.paneId)!.status = "idle";
     w.panes.get(busy.paneId)!.status = "working";
@@ -144,6 +144,10 @@ describe("hourly loop", () => {
       expect.stringContaining("quiet"),
       expect.stringContaining("wait-ci"),
     ]);
+    // The waiting lane's last entry is shown on one line, whatever lines it was written in.
+    expect(run.findings.find((f) => f.startsWith("wait-ci"))).toBe(
+      "wait-ci waiting, no progress for 4h: WAITING: CI on acme/app#3 retry at 14:00",
+    );
     const lanesAfter = readdirSync(join(d.store.root, "lanes")).map((f) =>
       readFileSync(join(d.store.root, "lanes", f), "utf8"),
     );

@@ -82,8 +82,12 @@ export async function main(argv: readonly string[], d: Deps = defaultDeps()): Pr
     case "report": {
       const st = one(a, "status");
       if (st && st !== "working" && st !== "waiting") throw new Refusal("--status must be working or waiting");
-      const sent = await report(d, need(x, "lane key"), await textOf(a), st as "working" | "waiting" | undefined);
+      const { sent, progress } = await report(d, need(x, "lane key"), await textOf(a), {
+        ...(st ? { status: st as "working" | "waiting" } : {}),
+        evidence: a.flags.get("evidence") ?? [],
+      });
       console.log(`REPORTED ${x}`);
+      for (const line of progress) console.log(line);
       return deliveryOutcome(sent, "lead");
     }
     case "ready": {
