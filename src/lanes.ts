@@ -101,10 +101,13 @@ export async function report(
   const progress = applyEvidence(lane, evidence, now);
   lane.log.push({ at: now, kind: "report", text: evidence.length ? `${text}\nevidence: ${evidence.join(" ")}` : text });
   lane.lastActivityAt = now;
-  if (opts.status === "waiting") {
+  // A report that leaves the lane waiting (--status waiting, or no --status on a waiting lane) records the start and the
+  // target, so a record from before `waitingSince`/`--for` keeps what was inferred before this report moved its clock.
+  if (opts.status === "waiting" || (still && opts.status === undefined)) {
     // Waiting is not progress: the lane stays on the same clock, and the target is named in its nudges and escalation.
+    // --for is shown on one line in nudges, the board and escalations, so it is stored that way.
     lane.waitingSince = still?.since ?? now;
-    lane.waitingFor = opts.waitingFor?.trim() || still?.target || blockerOf(text);
+    lane.waitingFor = oneLine(opts.waitingFor ?? "") || still?.target || blockerOf(text);
   } else if (opts.status === "working") {
     delete lane.waitingFor;
     delete lane.waitingSince;

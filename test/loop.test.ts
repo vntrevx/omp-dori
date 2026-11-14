@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { backlogDecide } from "../src/backlog.ts";
 import { dutyTick } from "../src/duty.ts";
+import { hhmm } from "../src/fit.ts";
 import { done, ready, report, startLane } from "../src/lanes.ts";
 import { HOUR, loopTick } from "../src/loop.ts";
 import { setup } from "./loop-setup.ts";
@@ -144,9 +145,9 @@ describe("hourly loop", () => {
       expect.stringContaining("quiet"),
       expect.stringContaining("wait-ci"),
     ]);
-    // The waiting lane's last entry is shown on one line, whatever lines it was written in.
+    // The waiting lane is named by what it waits on (its last entry is now the duty loop's escalation), on one line.
     expect(run.findings.find((f) => f.startsWith("wait-ci"))).toBe(
-      "wait-ci waiting, no progress for 4h: WAITING: CI on acme/app#3 retry at 14:00",
+      `wait-ci waiting, no progress for 4h: on CI on acme/app#3 since ${hhmm(wait.createdAt)}`,
     );
     const lanesAfter = readdirSync(join(d.store.root, "lanes")).map((f) =>
       readFileSync(join(d.store.root, "lanes", f), "utf8"),
