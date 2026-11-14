@@ -1,6 +1,8 @@
-# Contributing
+# Contributing to omp-dori
 
 Thanks for looking. This repository is a small, strict codebase; a change lands when it is one concern, it has evidence, and every gate is green.
+
+For omp-dori bugs and feature requests, open an [issue](https://github.com/vntrevx/omp-dori/issues); submit changes as [pull requests](https://github.com/vntrevx/omp-dori/pulls) to this fork. The development and pull-request guidance below applies to omp-dori; the upstream CLA process is separate.
 
 ## Upstream CLA process (sisyphuslabs/dori-superagent only)
 
@@ -80,6 +82,6 @@ The compatibility checkout stays outside the repository (`RUNNER_TEMP` in CI) an
 - Public surfaces — issues, pull requests, commits, review comments — are English.
 - Do not edit another person's work to make your change pass; report it instead.
 
-## Licence
+## Licences and notices
 
-The project is licensed under the [Sustainable Use License](LICENSE), with third-party components under their own licences. By contributing you agree your contribution is licensed under the same terms. The upstream [CLA](CLA.md) is retained unchanged and applies to upstream sisyphuslabs/dori-superagent only; this fork does not require a CLA signature.
+Upstream code remains under the [Sustainable Use License 1.0](LICENSE). The pre-existing OMP integration retains its [MIT notice](LICENSE.omp-dori); this does not relicense upstream code as MIT. [NOTICE](NOTICE) records the modified copy and attribution, and third-party components retain their own licences. Contributions follow the applicable existing licence terms. The upstream [CLA](CLA.md) is retained unchanged and applies to upstream sisyphuslabs/dori-superagent only; this fork does not require a CLA signature.

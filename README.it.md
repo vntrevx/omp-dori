@@ -71,10 +71,16 @@ Le sessioni lead/duty usano `omp --dori-role dori`; le lane di lavoro e il revis
 - [Ricetta container per maintainer](docs/container.md) · [Loop orario e backlog](docs/hourly-loop.md)
 - [Contribuire](CONTRIBUTING.md) · [Registro delle modifiche](CHANGELOG.md) · [Avviso sulla copia modificata](NOTICE)
 
-## Limiti, privacy e licenza
+## Contribuire
+
+Apri [issue](https://github.com/vntrevx/omp-dori/issues) e [pull request](https://github.com/vntrevx/omp-dori/pulls) per omp-dori in questo fork. Segui la [guida ai contributi](CONTRIBUTING.md); la procedura CLA upstream è separata.
+
+## Limiti e privacy
 
 Dori usa gli account e i permessi che fornisci. Le azioni esterne richiedono comunque l'autorizzazione del proprietario; i controlli di completamento dimostrano i segnali configurati, non la correttezza di ogni risultato. Abilita solo le sessioni e i monitor che intendi eseguire. Le sessioni AI consumano la quota del tuo provider.
 
 La telemetria facoltativa si disattiva con `DORI_TELEMETRY=0` o `DO_NOT_TRACK=1`. Tieni credenziali e dati privati di sessioni e progetti fuori dai rapporti pubblici.
 
-Il codice upstream resta sotto la [Sustainable Use License 1.0](LICENSE): uso interno della propria attività e uso non commerciale/personale, con condizioni per distribuzione e avvisi. L'avviso preesistente sull'integrazione OMP resta in [LICENSE.omp-dori](LICENSE.omp-dori); questo non attribuisce la licenza MIT al codice upstream. [NOTICE](NOTICE) documenta la copia modificata e le attribuzioni. omp-ulw e gli altri componenti di terze parti mantengono le proprie licenze.
+## Licenza
+
+Il codice upstream resta sotto la [Sustainable Use License 1.0](LICENSE): uso interno della propria attività e uso non commerciale/personale, con condizioni per distribuzione e avvisi. L'avviso preesistente sull'integrazione OMP resta in [LICENSE.omp-dori (MIT)](LICENSE.omp-dori); questo non attribuisce la licenza MIT al codice upstream. [NOTICE](NOTICE) documenta la copia modificata e le attribuzioni. omp-ulw e gli altri componenti di terze parti mantengono le proprie licenze.

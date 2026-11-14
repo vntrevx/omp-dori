@@ -71,10 +71,16 @@ Lead-/Duty-Sessions verwenden `omp --dori-role dori`; Arbeits-Lanes und der eing
 - [Container-Anleitung für Maintainer](docs/container.md) · [Stündlicher Loop und Backlog](docs/hourly-loop.md)
 - [Mitwirken](CONTRIBUTING.md) · [Änderungsprotokoll](CHANGELOG.md) · [Hinweis zur modifizierten Kopie](NOTICE)
 
-## Grenzen, Datenschutz und Lizenz
+## Mitwirken
+
+Erstelle [Issues](https://github.com/vntrevx/omp-dori/issues) und [Pull Requests](https://github.com/vntrevx/omp-dori/pulls) für omp-dori in diesem Fork. Beachte die [Hinweise zum Mitwirken](CONTRIBUTING.md); das CLA-Verfahren von Upstream ist davon getrennt.
+
+## Grenzen und Datenschutz
 
 Dori nutzt die Konten und Berechtigungen, die du bereitstellst. Externe Aktionen brauchen weiterhin die Freigabe des Besitzers; Abschlussprüfungen belegen die konfigurierten Signale, nicht die Richtigkeit jedes Ergebnisses. Aktiviere nur die Sessions und Monitore, die du ausführen willst. KI-Sessions verbrauchen das Kontingent deines eigenen Providers.
 
 Die optionale Telemetrie lässt sich mit `DORI_TELEMETRY=0` oder `DO_NOT_TRACK=1` abschalten. Halte Zugangsdaten und private Session-/Projektdaten aus öffentlichen Berichten heraus.
 
-Upstream-Code bleibt unter der [Sustainable Use License 1.0](LICENSE): eigener interner Geschäftsgebrauch sowie nicht kommerzielle/private Nutzung, unter Einhaltung der Bedingungen zu Weitergabe und Hinweisen. Der bestehende Hinweis zur OMP-Integration bleibt in [LICENSE.omp-dori](LICENSE.omp-dori); dadurch erhält Upstream-Code keine MIT-Lizenz. [NOTICE](NOTICE) dokumentiert die modifizierte Kopie und die Urheberangaben. omp-ulw und andere Drittkomponenten behalten ihre eigenen Lizenzen.
+## Lizenz
+
+Upstream-Code bleibt unter der [Sustainable Use License 1.0](LICENSE): eigener interner Geschäftsgebrauch sowie nicht kommerzielle/private Nutzung, unter Einhaltung der Bedingungen zu Weitergabe und Hinweisen. Der bestehende Hinweis zur OMP-Integration bleibt in [LICENSE.omp-dori (MIT)](LICENSE.omp-dori); dadurch erhält Upstream-Code keine MIT-Lizenz. [NOTICE](NOTICE) dokumentiert die modifizierte Kopie und die Urheberangaben. omp-ulw und andere Drittkomponenten behalten ihre eigenen Lizenzen.

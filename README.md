@@ -71,10 +71,16 @@ Lead/duty sessions use `omp --dori-role dori`; work lanes and the built-in revie
 - [Maintainer container recipe](docs/container.md) · [Hourly loop and backlog](docs/hourly-loop.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Modified-copy notice](NOTICE)
 
-## Limits, privacy and license
+## Contributing
+
+Open omp-dori [issues](https://github.com/vntrevx/omp-dori/issues) and [pull requests](https://github.com/vntrevx/omp-dori/pulls) in this fork. Follow the [contribution guide](CONTRIBUTING.md); the upstream CLA process is separate.
+
+## Limits and privacy
 
 Dori runs with the accounts and permissions you supply. External effects still need the owner's authorization; completion checks prove their configured signals, not correctness of every result. Enable only the sessions and monitors you intend to run. AI sessions use your own provider quota.
 
 Optional telemetry can be disabled with `DORI_TELEMETRY=0` or `DO_NOT_TRACK=1`. Keep credentials and private session/project data out of public reports.
 
-Upstream code remains under the [Sustainable Use License 1.0](LICENSE): own internal business use and non-commercial/personal use, with distribution and notice conditions. The pre-existing OMP integration notice remains in [LICENSE.omp-dori](LICENSE.omp-dori); this does not relicense upstream code as MIT. [NOTICE](NOTICE) records the modified copy and attribution. omp-ulw and other third-party components retain their own licenses.
+## License
+
+Upstream code remains under the [Sustainable Use License 1.0](LICENSE): own internal business use and non-commercial/personal use, with distribution and notice conditions. The pre-existing OMP integration notice remains in [LICENSE.omp-dori (MIT)](LICENSE.omp-dori); this does not relicense upstream code as MIT. [NOTICE](NOTICE) records the modified copy and attribution. omp-ulw and other third-party components retain their own licenses.

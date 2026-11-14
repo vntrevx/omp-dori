@@ -71,10 +71,16 @@ Lead·duty는 `omp --dori-role dori`, 작업 레인과 기본 reviewer는 `--dor
 - [Maintainer container 예제](docs/container.md) · [시간 단위 loop와 backlog](docs/hourly-loop.md)
 - [기여 안내](CONTRIBUTING.md) · [변경 기록](CHANGELOG.md) · [수정본 고지](NOTICE)
 
-## 한계·개인정보·라이선스
+## 기여하기
+
+omp-dori의 [issue](https://github.com/vntrevx/omp-dori/issues)와 [PR](https://github.com/vntrevx/omp-dori/pulls)은 이 fork에 제출하고 [기여 안내](CONTRIBUTING.md)를 따라 주세요. Upstream CLA 절차는 별개입니다.
+
+## 한계·개인정보
 
 Dori는 사용자가 제공한 계정과 권한으로 실행합니다. 외부 변경에는 여전히 소유자의 승인이 필요하며 완료 검사는 설정한 신호를 입증하는 절차입니다. 모든 결과의 정확성을 보장하지는 않습니다. 운영할 세션과 monitor만 켜세요. AI 세션은 본인 provider의 사용량을 소비합니다.
 
 선택적 telemetry는 `DORI_TELEMETRY=0` 또는 `DO_NOT_TRACK=1`로 끕니다. 공개 보고에 인증 정보나 비공개 세션·프로젝트 데이터를 넣지 마세요.
 
-Upstream 코드는 [Sustainable Use License 1.0](LICENSE)을 유지합니다. 자체 내부 업무와 비상업·개인 이용을 허용하며 배포·고지 조건이 적용됩니다. 기존 OMP 통합 고지는 [LICENSE.omp-dori](LICENSE.omp-dori)에 남으며 upstream 코드를 MIT로 바꾸는 것은 아닙니다. [NOTICE](NOTICE)에 수정본과 출처를 기록합니다. omp-ulw와 다른 제3자 구성 요소는 각각의 라이선스를 유지합니다.
+## 라이선스
+
+Upstream 코드는 [Sustainable Use License 1.0](LICENSE)을 유지합니다. 자체 내부 업무와 비상업·개인 이용을 허용하며 배포·고지 조건이 적용됩니다. 기존 OMP 통합 고지는 [LICENSE.omp-dori (MIT)](LICENSE.omp-dori)에 남으며 upstream 코드를 MIT로 바꾸는 것은 아닙니다. [NOTICE](NOTICE)에 수정본과 출처를 기록합니다. omp-ulw와 다른 제3자 구성 요소는 각각의 라이선스를 유지합니다.
