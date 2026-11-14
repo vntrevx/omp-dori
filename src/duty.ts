@@ -4,9 +4,12 @@ import { runHook } from "./hooks.ts";
 import { flushInbox, sendOrThrow, tellLead } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { refText } from "./refs.ts";
+import { escalation, progressOf, stalled } from "./progress.ts";
 import type { Lane } from "./store-types.ts";
+import { ageText, hhmm } from "./fit.ts";
 
-export const NUDGE_MINUTES = [10, 20, 40] as const;
+/** Quiet minutes before the first and second nudge; the lead is told at ESCALATE_MINUTES without progress. */
+export const NUDGE_MINUTES = [10, 20] as const;
 
 export type DutyEvent = { lane?: string; pane?: string; action: string; detail?: string };
 
@@ -66,31 +69,48 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       if (st === "working") {
         lane.lastActivityAt = now;
         d.store.saveLane(lane);
+      }
+      if (lane.status === "waiting") continue;
+      // The lead hears of a stall whatever the pane is doing: a lane can be busy, blocked or chatty without progress.
+      if (stalled(lane, now)) {
+        // The stall counts as told once the message is in the lead's inbox: from there the inbox delivers it whatever
+        // this flush does. With no lead registered nothing is queued or marked, and the next pass tries again.
+        const leadRef = d.store.roles().lead;
+        if (!leadRef) {
+          events.push({ lane: lane.key, action: "escalate-no-lead", detail: "no lead registered; told once one is" });
+          continue;
+        }
+        const msg = escalation(lane, st, now);
+        d.store.enqueue(leadRef, { at: now, from: "duty", text: msg });
+        lane.escalatedAt = now;
+        lane.log.push({ at: now, kind: "escalate", text: msg });
+        d.store.saveLane(lane);
+        events.push({ lane: lane.key, action: "escalated" });
+        await flushInbox(d, leadRef);
         continue;
       }
-      if (lane.status === "waiting" || st === "blocked" || st === "error") continue;
-      const idleMin = (now - lane.lastActivityAt) / 60_000;
+      if (st === "working" || st === "blocked" || st === "error") continue;
+      // Nudges answer silence: any report or a working pane restarts the quiet time, but only progress resets the count.
+      const quietMin = (now - Math.max(progressOf(lane), lane.lastActivityAt)) / 60_000;
       const due = NUDGE_MINUTES[lane.nudges];
-      if (due === undefined || idleMin < due) continue;
+      if (due === undefined || quietMin < due) continue;
       lane.nudges += 1;
-      lane.log.push({ at: now, kind: "nudge", text: `idle ${Math.floor(idleMin)} min` });
+      lane.log.push({ at: now, kind: "nudge", text: `idle ${Math.floor(quietMin)} min` });
       d.store.saveLane(lane);
-      if (lane.nudges < NUDGE_MINUTES.length) {
-        await sendOrThrow(
-          d,
-          lane.key,
-          prompt("nudge.md", { key: lane.key, minutes: String(Math.floor(idleMin)), dori: d.doriCmd }),
-          "duty",
-        );
-        events.push({ lane: lane.key, action: `nudge-${lane.nudges}` });
-      } else {
-        await tellLead(
-          d,
-          `[ESCALATE ${lane.key}] idle ${Math.floor(idleMin)} min with no READY after ${lane.nudges - 1} nudges`,
-          "duty",
-        );
-        events.push({ lane: lane.key, action: "escalated" });
-      }
+      const since = progressOf(lane);
+      await sendOrThrow(
+        d,
+        lane.key,
+        prompt("nudge.md", {
+          key: lane.key,
+          minutes: String(Math.floor(quietMin)),
+          since: hhmm(since),
+          age: ageText(now - since),
+          dori: d.doriCmd,
+        }),
+        "duty",
+      );
+      events.push({ lane: lane.key, action: `nudge-${lane.nudges}` });
     } catch (e) {
       // One lane's failed status read or delivery must not end the loop for the other lanes.
       events.push({ lane: listed.key, action: "lane-failed", detail: failureDetail(e) });

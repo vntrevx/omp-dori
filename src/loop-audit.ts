@@ -1,18 +1,16 @@
-// The hourly loop's audit pass: open lanes whose session is gone, READY lanes left open, lanes silent for hours.
+// The hourly loop's audit pass: open lanes whose session is gone, READY lanes left open, lanes without progress for hours.
+import { fitEnd, oneLine } from "./fit.ts";
 import type { Deps } from "./harness.ts";
+import { progressOf } from "./progress.ts";
 import { refText } from "./refs.ts";
 import type { AgentStatus } from "./runtime/types.ts";
-import type { Lane, LoopRun } from "./store-types.ts";
+import type { LoopRun } from "./store-types.ts";
 
 export const HOUR = 3_600_000;
 const STALE_HOURS = 3;
 const READY_HOURS = 2;
 
 const hours = (ms: number): number => Math.floor(ms / HOUR);
-
-/** The last time the lane itself said something (start or report). Pane polling by the duty loop does not count. */
-const lastReport = (lane: Lane): number =>
-  Math.max(lane.createdAt, ...lane.log.filter((e) => e.kind === "start" || e.kind === "report").map((e) => e.at));
 
 export async function audit(d: Deps, run: LoopRun): Promise<void> {
   const now = d.now();
@@ -31,12 +29,15 @@ export async function audit(d: Deps, run: LoopRun): Promise<void> {
       const age = now - (lane.final?.at ?? lane.lastActivityAt);
       if (age >= READY_HOURS * HOUR)
         run.findings.push(`${lane.key} READY ${hours(age)}h ago, not closed: dori harness done ${lane.key}`);
-    } else if (now - lastReport(lane) >= STALE_HOURS * HOUR) {
-      const age = hours(now - lastReport(lane));
+    } else if (now - progressOf(lane) >= STALE_HOURS * HOUR) {
+      // Progress, not talk: a lane that keeps reporting without new evidence is as stale as a silent one.
+      const age = hours(now - progressOf(lane));
+      // The last entry can be a several-line escalation or a report with its evidence: one line, cut on a character.
+      const last = lane.log.at(-1)?.text;
       run.findings.push(
         lane.status === "waiting"
-          ? `${lane.key} waiting ${age}h on: ${lane.log.at(-1)?.text.slice(0, 80) ?? "?"}`
-          : `${lane.key} working, no report for ${age}h`,
+          ? `${lane.key} waiting, no progress for ${age}h: ${last === undefined ? "?" : fitEnd(oneLine(last), 80)}`
+          : `${lane.key} working, no progress for ${age}h`,
       );
     }
   }

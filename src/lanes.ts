@@ -5,6 +5,7 @@ import { agentCommand, prompt, type Deps } from "./harness.ts";
 import { settled, tellLead, type SendResult } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { runHook } from "./hooks.ts";
+import { applyEvidence } from "./progress.ts";
 import { refText } from "./refs.ts";
 import { groupId } from "./runtime/group.ts";
 import { openSession } from "./runtime/types.ts";
@@ -53,6 +54,7 @@ export async function startLane(
     status: "working",
     createdAt: now,
     lastActivityAt: now,
+    progressAt: now,
     nudges: 0,
     log: [{ at: now, kind: "start", text: briefFile }],
   };
@@ -70,21 +72,30 @@ function openLane(d: Deps, key: string): Lane {
   return lane;
 }
 
+/**
+ * Logs a lane's report and tells the lead. Only new evidence moves the progress clock and clears the nudge count; the
+ * returned lines say whether it did. `sent` is the delivery to the lead.
+ */
 export async function report(
   d: Deps,
   key: string,
   text: string,
-  status?: "working" | "waiting",
-): Promise<SendResult | undefined> {
+  opts: { status?: "working" | "waiting"; evidence?: readonly string[] } = {},
+): Promise<{ sent: SendResult | undefined; progress: string[] }> {
   const lane = openLane(d, key);
   const now = d.now();
-  lane.log.push({ at: now, kind: "report", text });
+  const evidence = opts.evidence ?? [];
+  // The clock is read before this report joins the log: a record from before the clock falls back to its last report,
+  // and that fallback must not count the report being judged (a lane could otherwise talk its way out of a stall).
+  const progress = applyEvidence(lane, evidence, now);
+  lane.log.push({ at: now, kind: "report", text: evidence.length ? `${text}\nevidence: ${evidence.join(" ")}` : text });
   lane.lastActivityAt = now;
-  lane.nudges = 0;
-  if (status) lane.status = status;
+  if (opts.status) lane.status = opts.status;
   d.store.saveLane(lane);
-  void runHook(d, "onReport", { key, text, evidence: "" });
-  return settled(tellLead(d, `[REPORT ${key}${status === "waiting" ? " WAITING" : ""}] ${text}`, key));
+  void runHook(d, "onReport", { key, text, evidence: evidence.join(" ") });
+  const head = `[REPORT ${key}${opts.status === "waiting" ? " WAITING" : ""}]`;
+  const tail = evidence.length ? `\nevidence: ${evidence.join(" ")}` : "";
+  return { sent: await settled(tellLead(d, `${head} ${text}${tail}`, key)), progress };
 }
 
 export async function ready(
@@ -100,6 +111,7 @@ export async function ready(
   lane.status = "ready";
   lane.final = { text, evidence: [...evidence], at: now };
   lane.lastActivityAt = now;
+  lane.progressAt = now;
   lane.log.push({ at: now, kind: "ready", text });
   d.store.saveLane(lane);
   const sent = await settled(tellLead(d, `[READY ${key}] ${text}\nevidence: ${evidence.join(" ")}`, key));
