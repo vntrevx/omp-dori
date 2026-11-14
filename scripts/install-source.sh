@@ -8,6 +8,7 @@
 # Source omp-ulw follows OMP_ULW_REF (default main; lock uses omp-ulw.lock), or reuses an existing checkout.
 # Primary mode discovers it globally; side mode loads it only through the isolated omp-dori omp wrapper.
 # Optional paths: DORI_SRC, OMP_ULW_SRC, OMP_ULW_REPO, SKILLS_DIR, OMP_EXTENSIONS_DIR, OMP_DORI_HOME, OMP_DORI_BIN_DIR.
+# Side mode also takes OMP_DORI_HC_SESSION (default omp-dori) and OMP_DORI_HC_SPACE (a Herdr app space id).
 set -euo pipefail
 
 fail() { echo "$1" >&2; exit 1; }
@@ -77,9 +78,9 @@ other_dori() {
   [ -n "$consumer" ] && return 0
   marked "$primary_home" && return 1
   [ -L "$earlier_extension_link" ] && return 1
-  [ -d "$primary_home/src/.git" ] && is_omp_dori "$primary_home/src" && return 1
+  [ -e "$primary_home/src/.git" ] && is_omp_dori "$primary_home/src" && return 1
   [ -f "$primary_home/config.json" ] && return 0
-  [ -d "$primary_home/src/.git" ] && return 0
+  [ -e "$primary_home/src/.git" ] && return 0
   return 1
 }
 other=""
@@ -191,11 +192,12 @@ if [ "$mode" = side ]; then
     "$base/bin/dori" "$base/bin/omp" "$base/bin/omp-dori"
 fi
 
-if [ -z "${DORI_SRC:-}" ] && [ -d "$src/.git" ] && ! is_omp_dori "$src"; then
+# A linked worktree has a .git file rather than a directory.
+if [ -z "${DORI_SRC:-}" ] && [ -e "$src/.git" ] && ! is_omp_dori "$src"; then
   fail "$src is a checkout of $(git -C "$src" remote get-url origin 2>/dev/null || echo 'another repository'), not omp-dori; nothing was changed. Move it aside, set DORI_SRC, or install with DORI_INSTALL_MODE=side."
 fi
 
-if [ ! -d "$src/.git" ]; then
+if [ ! -e "$src/.git" ]; then
   git clone --quiet --depth 1 "$repo" "$src"
 elif [[ "${DORI_NO_PULL:-}" =~ ^(1|true|yes)$ ]]; then
   echo "DORI_NO_PULL=$DORI_NO_PULL: installing $src as it is, without pulling" >&2
@@ -233,7 +235,7 @@ if [ -n "$standalone_ulw" ]; then
     echo "omp-ulw: removed the earlier $extensions/omp-ulw link so omp-ulw loads once." >&2
   fi
 elif [ -z "$ulw_explicit" ]; then
-  [ -d "$ulw/.git" ] || git clone --quiet "$ulw_repo" "$ulw"
+  [ -e "$ulw/.git" ] || git clone --quiet "$ulw_repo" "$ulw"
   if [ -n "${OMP_ULW_REPO:-}" ]; then git -C "$ulw" remote set-url origin "$ulw_repo"; fi
   git -C "$ulw" fetch --quiet origin
   if [ "$ulw_ref" = lock ]; then
@@ -373,6 +375,8 @@ EOF
   printf 'export DORI_STATE_DIR=%q\n' "$base/state"
   printf 'export DORI_AGENT_CMD=%q\n' "$base/bin/omp"
   printf 'export HC_SESSION=%q\n' "$hc_session"
+  # A Herdr app space id shows the side Dori's terminals in that space; without one, hc keeps them hidden.
+  [ -z "${OMP_DORI_HC_SPACE:-}" ] || printf 'export DORI_HC_SPACE=%q\n' "$OMP_DORI_HC_SPACE"
   printf 'case ":$PATH:" in *:%q:*) ;; *) export PATH=%q:"$PATH" ;; esac\n' "$base/bin" "$base/bin"
 } > "$base/env.sh"
 wrapper() {
@@ -397,6 +401,6 @@ Installed next to the Dori in $primary_home, which was not changed.
   Config:     $config
 Next: create a separate messenger bot and channel, set runtime, leadPane, defaultCwd, defaultModel and hooks
 in $config, then start the lead in its own hc session:
-  omp-dori hc run --name omp-dori-lead -- omp-dori omp --dori-role dori
+  omp-dori hc run --name omp-dori-lead${OMP_DORI_HC_SPACE:+ --label herdr.space=$OMP_DORI_HC_SPACE} -- omp-dori omp --dori-role dori
 Installation does not start a messenger, watcher or hc server.
 EOF
