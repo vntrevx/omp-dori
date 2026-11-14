@@ -9,9 +9,9 @@ export type LaneStatus = "working" | "waiting" | "ready" | "done" | "lost";
  * `sessionPath`: the agent's own session file, when its command records one; `dori migrate --resume` needs it.
  * `progressAt`: the last time the lane made progress (start, a report with new evidence, READY); the duty loop nudges and
  * escalates on it, and a record from before it existed falls back to its last start, report or READY. `lastEvidence`:
- * the evidence that last moved it. `evidenceSeen`: links that already counted once. `escalatedAt`: when the lead was
- * last told the lane made no progress; one escalation per stall. `lastActivityAt`: the last sign of life (any report, a
- * working pane).
+ * the evidence that last moved it. `evidenceSeen`: links that already counted once. `evidenceMtimes`: each file that
+ * counted, by absolute path, with the modification time it counted with. `escalatedAt`: when the lead was last told the
+ * lane made no progress; one escalation per stall. `lastActivityAt`: the last sign of life (any report, a working pane).
  */
 export type Lane = {
   key: string;
@@ -29,6 +29,7 @@ export type Lane = {
   progressAt?: number;
   lastEvidence?: { ref: string; at: number };
   evidenceSeen?: string[];
+  evidenceMtimes?: Record<string, number>;
   escalatedAt?: number;
   nudges: number;
   final?: { text: string; evidence: string[]; at: number };

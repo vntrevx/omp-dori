@@ -122,6 +122,52 @@ describe("the progress clock", () => {
     expect((await at(42)).map((e) => e.action)).not.toContain("escalated");
   });
 
+  test("a file dated in the future counts once: reporting it again unchanged does not reset the clock", async () => {
+    const { w, d, lane, at } = await quietLane();
+    const future = touched(d.store.root, "future.md", lane.createdAt + 120 * MIN);
+    w.clock = lane.createdAt + 5 * MIN;
+    await report(d, "talker", "draft", { evidence: [future] });
+    expect(d.store.lane("talker")!.progressAt).toBe(w.clock);
+    for (const min of [15, 30, 44]) {
+      w.clock = lane.createdAt + min * MIN;
+      await report(d, "talker", `same draft ${min}`, { evidence: [future] });
+      expect(d.store.lane("talker")!.progressAt).toBe(lane.createdAt + 5 * MIN);
+    }
+    const again = await captureIo(() => main(["report", "talker", "--text", "x", "--evidence", future], d));
+    expect(again.out).toMatch(/not counted: .*future\.md \(counted before, not changed since\)/);
+    expect(await at(45)).toContainEqual({ lane: "talker", action: "escalated" });
+    touched(d.store.root, "future.md", lane.createdAt + 121 * MIN);
+    await report(d, "talker", "edited the draft", { evidence: [future] });
+    expect(d.store.lane("talker")!.progressAt).toBe(w.clock);
+  });
+
+  test("a maximum-length lane key keeps every diagnostic field, each line within 120 columns", async () => {
+    const { w, d, lead, brief } = setup();
+    const key = `lane-${"k".repeat(36)}`;
+    expect(key.length).toBe(41);
+    const lane = await startLane(d, key, brief, { group: "w1" });
+    w.panes.get(lane.paneId)!.status = "idle";
+    const tick = (min: number) => {
+      w.clock = lane.createdAt + min * MIN;
+      return dutyTick(d);
+    };
+    const file = touched(d.store.root, `${"long-evidence-name-".repeat(5)}.md`, lane.createdAt + MIN);
+    w.clock = lane.createdAt + MIN;
+    await report(d, key, "draft", { evidence: [file] });
+    await tick(11);
+    await tick(21);
+    for (const min of [25, 30, 35]) {
+      w.clock = lane.createdAt + min * MIN;
+      await report(d, key, "still going");
+    }
+    expect(await tick(41)).toContainEqual({ lane: key, action: "escalated" });
+    const lines = lead.received.at(-1)!.split("\n");
+    expect(lines[0]).toBe(`[ESCALATE ${key}] no new evidence for 40m (since ${lines[0]!.slice(-6, -1)})`);
+    expect(lines[1]).toBe("pane idle, 2 nudges, 3 reports without evidence");
+    expect(lines[2]).toMatch(/^last evidence: .*\.md @ \d\d:\d\d\. Next: /);
+    for (const l of lines) expect(Bun.stringWidth(l)).toBeLessThanOrEqual(120);
+  });
+
   test("dori report prints whether the clock moved and why not", async () => {
     const { w, d } = await quietLane();
     w.clock += 12 * MIN;

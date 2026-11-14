@@ -3,7 +3,7 @@
 // that keeps saying "still waiting" is escalated to the lead like a silent one.
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { ageText, fitEnd, fitStart, hhmm } from "./fit.ts";
+import { ageText, fitStart, hhmm } from "./fit.ts";
 import type { Lane } from "./store-types.ts";
 
 /** Minutes without progress before the duty loop tells the lead, once per stall. */
@@ -19,16 +19,19 @@ export const progressOf = (lane: Lane): number =>
     ...lane.log.filter((e) => e.kind === "start" || e.kind === "report" || e.kind === "ready").map((e) => e.at),
   );
 
-/** Why one --evidence value does not count as progress, or undefined when it does. */
-function notCounted(lane: Lane, ref: string, since: number): string | undefined {
-  if (LINK_RE.test(ref)) return lane.evidenceSeen?.includes(ref) ? "reported before" : undefined;
+/** Why one --evidence value does not count as progress, or its file's modification time (0 for a link) when it does. */
+function counted(lane: Lane, ref: string, since: number): { why: string } | { mtime: number } {
+  if (LINK_RE.test(ref)) return lane.evidenceSeen?.includes(ref) ? { why: "reported before" } : { mtime: 0 };
   let mtime: number;
   try {
     mtime = statSync(resolve(ref)).mtimeMs;
   } catch {
-    return "no such file";
+    return { why: "no such file" };
   }
-  return mtime > since ? undefined : `not changed since ${hhmm(since)}`;
+  if (mtime <= since) return { why: `not changed since ${hhmm(since)}` };
+  // A file dated in the future stays newer than the last progress until the clock catches up, so it counts only when
+  // its modification time differs from the one it counted with last time.
+  return lane.evidenceMtimes?.[resolve(ref)] === mtime ? { why: "counted before, not changed since" } : { mtime };
 }
 
 /**
@@ -41,13 +44,14 @@ export function applyEvidence(lane: Lane, evidence: readonly string[], now: numb
   const skipped: string[] = [];
   let moved: string | undefined;
   for (const ref of evidence) {
-    const why = notCounted(lane, ref, since);
-    if (why !== undefined) {
-      skipped.push(`  not counted: ${fitStart(ref, 60)} (${why})`);
+    const c = counted(lane, ref, since);
+    if ("why" in c) {
+      skipped.push(`  not counted: ${fitStart(ref, 60)} (${c.why})`);
       continue;
     }
     moved = ref;
     if (LINK_RE.test(ref)) lane.evidenceSeen = [...(lane.evidenceSeen ?? []), ref];
+    else lane.evidenceMtimes = { ...lane.evidenceMtimes, [resolve(ref)]: c.mtime };
   }
   if (moved === undefined)
     return [
@@ -69,13 +73,18 @@ export const stalled = (lane: Lane, now: number): boolean =>
   now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 &&
   (lane.escalatedAt === undefined || lane.escalatedAt <= progressOf(lane));
 
-/** The [ESCALATE] message: how long, what the pane is doing, how often it was nudged or talked, the last evidence. */
+/**
+ * The [ESCALATE] message: how long, what the pane is doing, how often it was nudged or talked, the last evidence. The
+ * key line is the only one that can be long (a lane key is up to 41 characters); the counts get a line of their own so
+ * no cut can drop them.
+ */
 export function escalation(lane: Lane, pane: string, now: number): string {
   const since = progressOf(lane);
   const talk = lane.log.filter((e) => e.kind === "report" && e.at > since).length;
-  const head = `[ESCALATE ${lane.key}] no new evidence for ${ageText(now - since)} (since ${hhmm(since)}); pane ${pane}, ${lane.nudges} nudges, ${talk} reports without evidence`;
+  const head = `[ESCALATE ${lane.key}] no new evidence for ${ageText(now - since)} (since ${hhmm(since)})`;
+  const counts = `pane ${pane}, ${lane.nudges} nudges, ${talk} reports without evidence`;
   const last = lane.lastEvidence
     ? `${fitStart(lane.lastEvidence.ref, 48)} @ ${hhmm(lane.lastEvidence.at)}`
     : "none recorded";
-  return `${fitEnd(head, 120)}\nlast evidence: ${last}. Next: check the lane, re-brief it, or close it.`;
+  return `${head}\n${counts}\nlast evidence: ${last}. Next: check the lane, re-brief it, or close it.`;
 }
