@@ -7,6 +7,11 @@ export type LaneStatus = "working" | "waiting" | "ready" | "done" | "lost";
  * beside it (the ref's id and container) so an older binary still reads the file. `migratedFrom`: the sessions it ran in
  * before a `dori migrate`. `migration`: a handover is in progress, and the duty loop leaves the record alone.
  * `sessionPath`: the agent's own session file, when its command records one; `dori migrate --resume` needs it.
+ * `progressAt`: the last time the lane made progress (start, a report with new evidence, READY); the duty loop nudges and
+ * escalates on it, and a record from before it existed falls back to its last start, report or READY. `lastEvidence`:
+ * the evidence that last moved it. `evidenceSeen`: links that already counted once. `escalatedAt`: when the lead was
+ * last told the lane made no progress; one escalation per stall. `lastActivityAt`: the last sign of life (any report, a
+ * working pane).
  */
 export type Lane = {
   key: string;
@@ -21,9 +26,13 @@ export type Lane = {
   status: LaneStatus;
   createdAt: number;
   lastActivityAt: number;
+  progressAt?: number;
+  lastEvidence?: { ref: string; at: number };
+  evidenceSeen?: string[];
+  escalatedAt?: number;
   nudges: number;
   final?: { text: string; evidence: string[]; at: number };
-  log: { at: number; kind: "start" | "report" | "ready" | "nudge" | "done" | "lost"; text: string }[];
+  log: { at: number; kind: "start" | "report" | "ready" | "nudge" | "escalate" | "done" | "lost"; text: string }[];
 };
 
 /** The sessions `dori up` opens; roles.json maps each to a ref string (a bare herdr pane id, or `hc:t7`). */

@@ -121,7 +121,7 @@ describe("hourly loop", () => {
     const fin = await startLane(d, "finished", brief, { group: "w1" });
     const gone = await startLane(d, "vanished", brief, { group: "w1" });
     await startLane(d, "fresh", brief, { group: "w1" });
-    await report(d, "wait-ci", "WAITING: CI on acme/app#3", "waiting");
+    await report(d, "wait-ci", "WAITING: CI on acme/app#3", { status: "waiting" });
     await ready(d, "finished", "done", ["https://github.com/acme/app/pull/3"]);
     for (const l of [quiet, wait, fin]) w.panes.get(l.paneId)!.status = "idle";
     w.panes.get(busy.paneId)!.status = "working";

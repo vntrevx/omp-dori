@@ -6,6 +6,7 @@ import { refText } from "./refs.ts";
 import { groupId } from "./runtime/group.ts";
 import { openSession, type SessionRef } from "./runtime/types.ts";
 import { RuntimeChoiceError } from "./runtime/select.ts";
+import { laneBoard } from "./status-view.ts";
 
 function renderPrompt(d: Deps, name: string): string {
   const dir = join(d.store.root, "prompts");
@@ -74,11 +75,5 @@ export function status(d: Deps): void {
   const roles = d.store.roles();
   const show = (ref: SessionRef | undefined) => (ref ? refText(ref) : "-");
   console.log(`lead=${show(roles.lead)} duty=${show(roles.duty)} home=${d.store.root}`);
-  for (const l of d.store.lanes()) {
-    const last = l.log.at(-1);
-    const age = Math.round((d.now() - l.lastActivityAt) / 60_000);
-    console.log(
-      `${l.key.padEnd(24)} ${l.status.padEnd(8)} ${l.sessionRef.runtime.padEnd(5)} ${refText(l.sessionRef).padEnd(14)} active ${age}m ago  ${last ? `${last.kind}: ${last.text.slice(0, 60)}` : ""}`,
-    );
-  }
+  for (const line of laneBoard(d.store.lanes(), d.now())) console.log(line);
 }
