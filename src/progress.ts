@@ -81,16 +81,16 @@ export const stalled = (lane: Lane, now: number): boolean => {
   return now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 && (told === undefined || told <= progressOf(lane));
 };
 
-/** A blocker named in report text: its first line without a leading `WAITING:`. */
+/** A blocker named in report text: its first line (a CR or line separator ends one too) without a leading `WAITING:`. */
 export const blockerOf = (text: string): string =>
-  text
-    .split("\n")[0]!
-    .replace(/^\s*WAITING:\s*/i, "")
-    .trim() || "?";
+  oneLine(text.split(/[\n\r\u2028\u2029]/)[0]!.replace(/^\s*WAITING:\s*/i, "")) || "?";
 
-/** What a waiting lane waits on; a record from before `--for` names its last report's blocker. */
+/**
+ * What a waiting lane waits on, on one line; a record from before `--for` names its last report's blocker. A target is
+ * stored one-line, and one stored before that is made so here.
+ */
 export const waitingTarget = (lane: Lane): string =>
-  lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?");
+  oneLine(lane.waitingFor ?? blockerOf(lane.log.findLast((e) => e.kind === "report")?.text ?? "?")) || "?";
 
 /** What a waiting lane waits on, cut to 40 columns. */
 export const waitingOn = (lane: Lane): string => fitEnd(waitingTarget(lane), 40);
