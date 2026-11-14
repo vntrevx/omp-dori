@@ -43,6 +43,18 @@ export const writeQueue = (path: string, msgs: readonly QueuedMessage[]): void =
 
 export const appendQueue = (path: string, msg: QueuedMessage): void => appendFileSync(path, `${JSON.stringify(msg)}\n`);
 
+// A queued message with an `id` (a duty notice) is queued for a session once: its id is recorded in `<inbox>.ids` when
+// it leaves the queue (delivered or acked), so a pass that queues it again after that finds it there.
+const idsFile = (path: string): string => `${path}.ids`;
+
+export const doneIds = (path: string): Set<string> =>
+  new Set(existsSync(idsFile(path)) ? readFileSync(idsFile(path), "utf8").split("\n").filter(Boolean) : []);
+
+export function markDone(path: string, msgs: readonly QueuedMessage[]): void {
+  const ids = msgs.flatMap((m) => (m.id === undefined ? [] : [m.id]));
+  if (ids.length > 0) appendFileSync(idsFile(path), ids.map((id) => `${id}\n`).join(""));
+}
+
 /** The session this inbox was forwarded to, or undefined. */
 export function forwardOf(root: string, ref: SessionRef): SessionRef | undefined {
   const marker = `${inboxFile(root, ref)}.forward`;

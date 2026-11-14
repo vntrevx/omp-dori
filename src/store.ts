@@ -3,10 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   appendQueue,
+  doneIds,
   forwardOf,
   forwardPending,
   inboxFile,
   inboxRefs,
+  markDone,
   mergeForwarded,
   readQueue,
   writeQueue,
@@ -105,11 +107,24 @@ export class Store {
     appendQueue(this.inboxPath(this.forwardOf(ref) ?? ref), msg);
   }
 
+  /**
+   * Queues a duty notice unless the same id is queued for this session or left its queue before (`<inbox>.ids`): a
+   * duty pass cut short after queueing it queues it again on the next pass. Returns false when it was not queued.
+   */
+  enqueueOnce(ref: SessionRef, msg: QueuedMessage & { id: string }): boolean {
+    const path = this.inboxPath(this.forwardOf(ref) ?? ref);
+    if (doneIds(path).has(msg.id) || readQueue(path).some((m) => m.id === msg.id)) return false;
+    appendQueue(path, msg);
+    return true;
+  }
+
   queued(ref: SessionRef): QueuedMessage[] {
     return readQueue(this.inboxPath(ref));
   }
 
-  saveInbox(ref: SessionRef, msgs: readonly QueuedMessage[]): void {
+  /** Rewrites the queue; the ids of `gone` (delivered or acked) are recorded first, so they are not queued again. */
+  saveInbox(ref: SessionRef, msgs: readonly QueuedMessage[], gone: readonly QueuedMessage[] = []): void {
+    markDone(this.inboxPath(ref), gone);
     writeQueue(this.inboxPath(ref), msgs);
   }
 

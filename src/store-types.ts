@@ -57,7 +57,8 @@ export type DeliveryAttempt = {
 /** A flush lock from another host (or an unreadable one) older than this is taken over; on this host only a dead pid frees it (#108). */
 export const INBOX_LOCK_STALE_MS = 60_000;
 
-export type QueuedMessage = { at: number; from: string; text: string; attempt?: DeliveryAttempt };
+/** `id`: a duty notice's fixed name (`escalate:<lane>:<progress at>`); one id is queued for a session only once. */
+export type QueuedMessage = { at: number; from: string; text: string; id?: string; attempt?: DeliveryAttempt };
 
 export type ReviewReceipt = {
   pr: string;

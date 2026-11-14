@@ -65,19 +65,14 @@ export function applyEvidence(lane: Lane, evidence: readonly string[], now: numb
 }
 
 /**
- * When the lead was last told this lane made no progress. A record from before `escalatedAt` was told at its third nudge:
- * the duty loop before the progress clock escalated there (this one nudges twice), so it is not told a second time.
- */
-const escalatedOf = (lane: Lane): number | undefined =>
-  lane.escalatedAt ?? (lane.nudges >= 3 ? lane.log.findLast((e) => e.kind === "nudge")?.at : undefined);
-
-/**
  * True when the lane has gone ESCALATE_MINUTES without progress and the lead has not been told about this stall. An
  * escalation is always at least ESCALATE_MINUTES after the progress it is about, so one at or before `progressOf` was
- * about an earlier stall (progress made in the same instant as the escalation starts a new one).
+ * about an earlier stall (progress made in the same instant as the escalation starts a new one). Only `escalatedAt` says
+ * the lead was told: a record from before it may show a third nudge, but the old duty loop saved that nudge before it
+ * told the lead, and told nobody when no lead was registered or the delivery failed.
  */
 export const stalled = (lane: Lane, now: number): boolean => {
-  const told = escalatedOf(lane);
+  const told = lane.escalatedAt;
   return now - progressOf(lane) >= ESCALATE_MINUTES * 60_000 && (told === undefined || told <= progressOf(lane));
 };
 
