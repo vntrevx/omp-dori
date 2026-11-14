@@ -52,10 +52,15 @@ const idsFile = (path: string): string => `${path}.ids`;
 export const doneIds = (path: string): Set<string> =>
   new Set(existsSync(idsFile(path)) ? readFileSync(idsFile(path), "utf8").split("\n").filter(Boolean) : []);
 
-export function markDone(path: string, msgs: readonly QueuedMessage[]): void {
-  const ids = msgs.flatMap((m) => (m.id === undefined ? [] : [m.id]));
+const recordIds = (path: string, ids: readonly string[]): void => {
   if (ids.length > 0) appendFileSync(idsFile(path), ids.map((id) => `${id}\n`).join(""));
-}
+};
+
+export const markDone = (path: string, msgs: readonly QueuedMessage[]): void =>
+  recordIds(
+    path,
+    msgs.flatMap((m) => (m.id === undefined ? [] : [m.id])),
+  );
 
 /** The session's queue as the flush sees it: entries whose id was recorded as gone are left out. */
 export function pendingQueue(path: string): QueuedMessage[] {
@@ -90,9 +95,30 @@ export const forwardPending = (root: string, ref: SessionRef): boolean =>
 const keyOf = (m: QueuedMessage): string => `${m.at}\u0000${m.from}\u0000${m.text}`;
 
 /**
+ * Appends the entries of `aside` (an inbox renamed aside, its ids still at `<from>.ids`) to the end of `into`, then
+ * removes it. The ids `from` recorded as gone are recorded for `into` first and their entries are left behind, so a
+ * notice delivered before the move is neither delivered nor queued again after it; an entry `into` already holds (a
+ * merge cut short after its append, keyed by at+from+text) is not added again.
+ */
+export function carryOver(aside: string, from: string, into: string, map: (m: QueuedMessage) => QueuedMessage): void {
+  const done = doneIds(from);
+  const known = doneIds(into);
+  recordIds(
+    into,
+    [...done].filter((id) => !known.has(id)),
+  );
+  const seen = new Set(readQueue(into).map(keyOf));
+  for (const m of readQueue(aside)) {
+    if ((m.id !== undefined && done.has(m.id)) || seen.has(keyOf(m))) continue;
+    seen.add(keyOf(m));
+    appendQueue(into, map(m));
+  }
+  rmSync(aside, { force: true });
+}
+
+/**
  * Moves the entries of every old inbox forwarded into `ref` to the end of ref's inbox. Call it under ref's inbox lock.
- * The old file is renamed aside first, so an append that races the merge lands in a fresh old file for the next one;
- * an entry already in ref's inbox (a merge cut short after its append) is not added again.
+ * The old file is renamed aside first, so an append that races the merge lands in a fresh old file for the next one.
  */
 export function mergeForwarded(root: string, ref: SessionRef): void {
   const into = inboxFile(root, ref);
@@ -107,13 +133,7 @@ export function mergeForwarded(root: string, ref: SessionRef): void {
           throw e;
         }
       }
-      const seen = new Set(readQueue(into).map(keyOf));
-      for (const m of readQueue(aside)) {
-        if (seen.has(keyOf(m))) continue;
-        seen.add(keyOf(m));
-        appendQueue(into, m);
-      }
-      rmSync(aside, { force: true });
+      carryOver(aside, old, into, (m) => m);
     }
   }
 }
