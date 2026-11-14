@@ -5,7 +5,7 @@ import { agentCommand, prompt, type Deps } from "./harness.ts";
 import { settled, tellLead, type SendResult } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { runHook } from "./hooks.ts";
-import { applyEvidence } from "./progress.ts";
+import { applyEvidence, blockerOf } from "./progress.ts";
 import { refText } from "./refs.ts";
 import { groupId } from "./runtime/group.ts";
 import { openSession } from "./runtime/types.ts";
@@ -74,14 +74,17 @@ function openLane(d: Deps, key: string): Lane {
 
 /**
  * Logs a lane's report and tells the lead. Only new evidence moves the progress clock and clears the nudge count; the
- * returned lines say whether it did. `sent` is the delivery to the lead.
+ * returned lines say whether it did. `sent` is the delivery to the lead. `--status waiting` records what the lane waits
+ * on (`waitingFor`; else the target it already named; else the blocker in the text) and since when; `--status working`
+ * clears both.
  */
 export async function report(
   d: Deps,
   key: string,
   text: string,
-  opts: { status?: "working" | "waiting"; evidence?: readonly string[] } = {},
+  opts: { status?: "working" | "waiting"; evidence?: readonly string[]; waitingFor?: string } = {},
 ): Promise<{ sent: SendResult | undefined; progress: string[] }> {
+  if (opts.waitingFor !== undefined && opts.status !== "waiting") throw new Refusal("--for needs --status waiting");
   const lane = openLane(d, key);
   const now = d.now();
   const evidence = opts.evidence ?? [];
@@ -90,6 +93,15 @@ export async function report(
   const progress = applyEvidence(lane, evidence, now);
   lane.log.push({ at: now, kind: "report", text: evidence.length ? `${text}\nevidence: ${evidence.join(" ")}` : text });
   lane.lastActivityAt = now;
+  if (opts.status === "waiting") {
+    // Waiting is not progress: the lane stays on the same clock, and the target is named in its nudges and escalation.
+    const still = lane.status === "waiting";
+    lane.waitingSince = still ? (lane.waitingSince ?? now) : now;
+    lane.waitingFor = opts.waitingFor?.trim() || (still ? lane.waitingFor : undefined) || blockerOf(text);
+  } else if (opts.status === "working") {
+    delete lane.waitingFor;
+    delete lane.waitingSince;
+  }
   if (opts.status) lane.status = opts.status;
   d.store.saveLane(lane);
   void runHook(d, "onReport", { key, text, evidence: evidence.join(" ") });
