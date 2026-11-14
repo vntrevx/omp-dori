@@ -44,7 +44,9 @@ export const writeQueue = (path: string, msgs: readonly QueuedMessage[]): void =
 export const appendQueue = (path: string, msg: QueuedMessage): void => appendFileSync(path, `${JSON.stringify(msg)}\n`);
 
 // A queued message with an `id` (a duty notice) is queued for a session once: its id is recorded in `<inbox>.ids` when
-// it leaves the queue (delivered or acked), so a pass that queues it again after that finds it there.
+// it leaves the queue (delivered or acked), so a pass that queues it again after that finds it there. The id is
+// recorded before the queue is rewritten without it, and the queue is read without the ids recorded there: a process
+// stopped between the two writes leaves an entry that reads as gone, never one delivered a second time.
 const idsFile = (path: string): string => `${path}.ids`;
 
 export const doneIds = (path: string): Set<string> =>
@@ -53,6 +55,12 @@ export const doneIds = (path: string): Set<string> =>
 export function markDone(path: string, msgs: readonly QueuedMessage[]): void {
   const ids = msgs.flatMap((m) => (m.id === undefined ? [] : [m.id]));
   if (ids.length > 0) appendFileSync(idsFile(path), ids.map((id) => `${id}\n`).join(""));
+}
+
+/** The session's queue as the flush sees it: entries whose id was recorded as gone are left out. */
+export function pendingQueue(path: string): QueuedMessage[] {
+  const done = doneIds(path);
+  return readQueue(path).filter((m) => m.id === undefined || !done.has(m.id));
 }
 
 /** The session this inbox was forwarded to, or undefined. */

@@ -5,6 +5,7 @@ import { flushInbox } from "./inbox.ts";
 import { Refusal } from "./refusal.ts";
 import { refText } from "./refs.ts";
 import { escalation, progressOf, stalled } from "./progress.ts";
+import type { SessionRef } from "./runtime/types.ts";
 import type { Lane } from "./store-types.ts";
 import { ageText, hhmm } from "./fit.ts";
 
@@ -17,12 +18,30 @@ export type DutyEvent = { lane?: string; pane?: string; action: string; detail?:
 const watched = (lane: Lane): boolean =>
   (lane.status === "working" || lane.status === "waiting") && lane.migration !== true;
 
+function queueLost(d: Deps, leadRef: SessionRef, lane: Lane, now: number): void {
+  const text = `[LOST ${lane.key}] pane ${refText(lane.sessionRef)} closed without a final answer`;
+  d.store.enqueueOnce(leadRef, { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` });
+}
+
+/** Lanes marked lost while no lead was registered: their notice is queued once one is, then the debt is cleared. */
+function tellLost(d: Deps, now: number): void {
+  const leadRef = d.store.roles().lead;
+  if (!leadRef) return;
+  for (const lane of d.store.lanes()) {
+    if (lane.lostUntold !== true) continue;
+    queueLost(d, leadRef, lane, now);
+    delete lane.lostUntold;
+    d.store.saveLane(lane);
+  }
+}
+
 /** One proactive pass: flush inboxes of panes that became idle, nudge silent lanes, escalate, detect lost panes. */
 export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
   // Kill switch: a stopped duty loop delivers, nudges and escalates nothing. Queued messages wait for the resume.
   const stop = d.store.stop("duty");
   if (stop) return [{ action: "stopped", detail: stop.reason }];
   const events: DutyEvent[] = [];
+  tellLost(d, d.now());
   for (const ref of d.store.inboxPanes()) {
     const paneId = refText(ref);
     try {
@@ -58,25 +77,19 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       if (lane === undefined || !watched(lane) || lane.sessionRef.id !== listed.sessionRef.id) continue;
       const now = d.now();
       if (st === "gone") {
-        // Like an escalation: queued under a fixed id before the lane is marked, so a pass cut short in between
-        // repeats it without a second notice; with no lead registered the lane stays watched until one is.
+        // Marked lost and its hook run whether or not a lead is registered: a lost lane must stop counting as open. The
+        // notice is queued first, under a fixed id, so a pass cut short before the lane is saved repeats it without a
+        // second notice; with no lead registered the lane owes it (`lostUntold`) and tellLost queues it once one is.
         const leadRef = d.store.roles().lead;
-        if (!leadRef) {
-          events.push({
-            lane: lane.key,
-            action: "lost-no-lead",
-            detail: "no lead registered; marked lost once one is",
-          });
-          continue;
-        }
-        const text = `[LOST ${lane.key}] pane ${refText(lane.sessionRef)} closed without a final answer`;
-        d.store.enqueueOnce(leadRef, { at: now, from: "duty", text, id: `lost:${lane.key}:${lane.createdAt}` });
+        if (leadRef) queueLost(d, leadRef, lane, now);
+        else lane.lostUntold = true;
         lane.status = "lost";
         lane.log.push({ at: now, kind: "lost", text: "pane disappeared without READY" });
         d.store.saveLane(lane);
         void runHook(d, "onLost", { key: lane.key, text: "pane disappeared without READY", evidence: "" });
         events.push({ lane: lane.key, action: "lost" });
-        await flushInbox(d, leadRef);
+        if (leadRef) await flushInbox(d, leadRef);
+        else events.push({ lane: lane.key, action: "lost-no-lead", detail: "no lead registered; told once one is" });
         continue;
       }
       if (st === "working") {

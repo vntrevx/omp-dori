@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dutyTick } from "../src/duty.ts";
 import type { Deps } from "../src/harness.ts";
+import { hooksSettled } from "../src/hooks.ts";
+import { readQueue } from "../src/inbox-files.ts";
 import { startLane } from "../src/lanes.ts";
 import { href } from "./fake.ts";
 import { setup } from "./harness-setup.ts";
@@ -86,16 +88,41 @@ describe("a duty notice reaches its reader exactly once", () => {
     expect(d.store.lane("talker")!.status).toBe("lost");
   });
 
-  test("a lane lost with no lead registered stays watched; the lead hears of it once one is", async () => {
+  test("a lane lost with no lead registered is marked lost and its hook runs; the lead hears of it once one is", async () => {
     const { w, d, lane, told } = await quietLane();
+    writeFileSync(join(d.store.root, "config.json"), JSON.stringify({ hooks: { onLost: ["my-hook", "{key}"] } }));
     rmSync(join(d.store.root, "roles.json"));
     w.panes.delete(lane.paneId);
-    expect(await dutyTick(d)).toContainEqual(expect.objectContaining({ lane: "talker", action: "lost-no-lead" }));
-    expect(d.store.lane("talker")!.status).toBe("working");
+    const first = await dutyTick(d);
+    expect(first).toContainEqual({ lane: "talker", action: "lost" });
+    expect(first).toContainEqual(expect.objectContaining({ lane: "talker", action: "lost-no-lead" }));
+    expect(d.store.lane("talker")!.status).toBe("lost");
+    await hooksSettled();
+    const hooked = () => w.calls.filter((c) => c.cmd === "my-hook").map((c) => c.argv);
+    expect(hooked()).toEqual([["talker"]]);
     d.store.setRole("lead", href("w1:p1"));
-    expect(await dutyTick(d)).toContainEqual({ lane: "talker", action: "lost" });
     await dutyTick(d);
+    await dutyTick(d);
+    await hooksSettled();
     expect(told("LOST")).toBe(1);
+    expect(hooked()).toEqual([["talker"]]);
+  });
+
+  test("killed between recording a delivered notice's id and rewriting its queue: the next flush does not resend it", async () => {
+    const { d, at, told } = await quietLane();
+    // The process dies inside the rewrite of the lead's inbox: the delivered ids are recorded, the queue is not rewritten.
+    const real = d.store.saveInbox.bind(d.store);
+    d.store.saveInbox = (ref, _msgs, gone = []) => {
+      d.store.saveInbox = real;
+      real(ref, readQueue(d.store.inboxPath(ref)), gone);
+      throw new Error("killed inside saveInbox");
+    };
+    expect((await at(40)).map((e) => e.action)).toContain("lane-failed");
+    expect(told("ESCALATE")).toBe(1);
+    await at(41);
+    await at(42);
+    expect(told("ESCALATE")).toBe(1);
+    expect(d.store.queued(href("w1:p1"))).toEqual([]);
   });
 
   test("killed before or after queueing a nudge: the lane gets it once and it is counted once", async () => {

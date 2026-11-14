@@ -10,6 +10,7 @@ import {
   inboxRefs,
   markDone,
   mergeForwarded,
+  pendingQueue,
   readQueue,
   writeQueue,
 } from "./inbox-files.ts";
@@ -118,11 +119,12 @@ export class Store {
     return true;
   }
 
+  /** The queue without entries whose id is recorded as gone (`<inbox>.ids`). */
   queued(ref: SessionRef): QueuedMessage[] {
-    return readQueue(this.inboxPath(ref));
+    return pendingQueue(this.inboxPath(ref));
   }
 
-  /** Rewrites the queue; the ids of `gone` (delivered or acked) are recorded first, so they are not queued again. */
+  /** Rewrites the queue. The ids of `gone` are recorded first and commit it: `queued` leaves them out from then on. */
   saveInbox(ref: SessionRef, msgs: readonly QueuedMessage[], gone: readonly QueuedMessage[] = []): void {
     markDone(this.inboxPath(ref), gone);
     writeQueue(this.inboxPath(ref), msgs);
