@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
-import { readPaneState } from "../../skills/dori-mode/scripts/src/lane-state.ts";
+import { type PaneState, readPaneState } from "../../skills/dori-mode/scripts/src/lane-state.ts";
 import { SHELLS } from "../runtime/foreground.ts";
 import type { Front } from "../runtime/herdr/probe.ts";
-import { processIdentity, sameProcess } from "./deployment-process.ts";
+import { DeploymentHeld, processIdentity, sameProcess } from "./deployment-process.ts";
 import type { DeploymentConfig } from "./deployment-types.ts";
 
 /** A foreground child shell is never the pane's bare prompt, including suspended/background native owners. */
@@ -46,4 +46,18 @@ export function bareRootShell(config: DeploymentConfig, front: Front): boolean {
   } catch {
     return false;
   }
+}
+
+/** Failure-only witnesses exclude process arguments and private session contents. */
+export function shellRejection(reason: string, front: Front, pid?: number, owner?: PaneState): DeploymentHeld {
+  return new DeploymentHeld(
+    `${reason}: ${JSON.stringify({
+      pid: pid ?? null,
+      shell: front.shell,
+      rootPid: front.rootPid ?? null,
+      pgid: front.pgid ?? null,
+      pids: front.processes?.map((process) => process.pid ?? null) ?? null,
+      ...(owner ? { owner: { pid: owner.pid, sessionId: owner.sessionId, role: owner.role } } : {}),
+    })}`,
+  );
 }

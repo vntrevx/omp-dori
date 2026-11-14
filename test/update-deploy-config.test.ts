@@ -59,6 +59,20 @@ function fixture() {
   return { root, config };
 }
 
+test("native stop mode is optional, canonical when absent and rejects malformed values", () => {
+  const { root, config } = fixture();
+  expect(Object.hasOwn(config, "nativeStopMode")).toBe(false);
+  expect(JSON.stringify(parseDeploymentConfig(config, root))).toBe(JSON.stringify(config));
+  for (const nativeStopMode of ["ui", "signal"] as const) {
+    const selected = parseDeploymentConfig({ ...config, nativeStopMode }, root);
+    expect(selected.nativeStopMode).toBe(nativeStopMode);
+    expect(parseDeploymentConfig(selected, root)).toEqual(selected);
+    expect(digest(JSON.stringify(selected))).not.toBe(digest(JSON.stringify(config)));
+  }
+  for (const nativeStopMode of [undefined, null, "", "UI", "auto", true, 1, {}])
+    expect(() => parseDeploymentConfig({ ...config, nativeStopMode }, root)).toThrow("nativeStopMode");
+});
+
 test("release-root shims remain stable through source conversion and restore their exact previous links", () => {
   const { root, config } = fixture();
   expect(config.home).toBe(join(root, "home"));

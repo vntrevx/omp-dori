@@ -16,7 +16,6 @@ const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
-
 /** Real exec-launched native group and script children; herdr supplies only their observed metadata. */
 export async function foregroundFixture(
   options: {
@@ -246,5 +245,6 @@ await stopChildren();
     writeHealth,
     observe,
     sendLine: (line: string) => child.stdin!.write(`${line}\n`),
+    closeNativeInput: () => (child.stdio[3] as Writable).end(),
   };
 }

@@ -5,6 +5,7 @@ import { HerdrCli } from "../runtime/herdr/exec.ts";
 import { foreground, probe } from "../runtime/herdr/probe.ts";
 import type { LegacyRollbackForeground } from "./deployment-legacy-monitors.ts";
 import { attestMonitorForeground } from "./deployment-monitor-receipts.ts";
+import { assertNativeUiIdle, requestNativeUiExit } from "./deployment-native-ui.ts";
 import {
   actorEnv,
   DeploymentBusy,
@@ -14,7 +15,7 @@ import {
   underProcess,
 } from "./deployment-process.ts";
 import { consumeQuiesceCheckpoint, verifyQuiesceCheckpoint } from "./deployment-quiesce.ts";
-import { bareRootShell } from "./deployment-shell.ts";
+import { bareRootShell, shellRejection } from "./deployment-shell.ts";
 import { terminateBoundProcess } from "./deployment-signal.ts";
 import type {
   DeploymentConfig,
@@ -149,7 +150,7 @@ export function assertRetryDeadline(record: DeploymentRecord): void {
     throw new DeploymentHeld("deployment pre-stop retry deadline expired or is invalid");
 }
 
-/** One identity-bound signal. A reused PID or a different pane/session is never signalled. */
+/** One identity-bound forward stop; rollback cleanup retains its bound signal path. */
 export async function stopRuntime(
   config: DeploymentConfig,
   cli: HerdrCli,
@@ -168,29 +169,38 @@ export async function stopRuntime(
     consumeQuiesceCheckpoint(config, record);
     return;
   }
-  const actual = await captureRuntime(config, cli, false, allowQuiesce ? record : undefined);
-  if (
-    !sameProcess(expected, actual) ||
-    actual.startedAt !== expected.startedAt ||
-    actual.sessionFile !== expected.sessionFile
-  )
-    throw new DeploymentHeld("native runtime changed before stop");
-  if (expected.pid === process.pid)
-    throw new DeploymentHeld("replacement controller must run outside the target actor");
-  for (const monitor of record.oldMonitors ?? []) {
-    if (!sameProcess(monitor) || monitor.pid === expected.pid || !underProcess(monitor.pid, expected.pid))
-      throw new DeploymentHeld("monitor identity changed before native stop");
+  const ui = config.nativeStopMode === "ui";
+  let uiFailure: DeploymentHeld | undefined;
+  if (!ui || !record.nativeUiExitRequestedAt) {
+    const actual = await captureRuntime(config, cli, false, allowQuiesce ? record : undefined);
+    if (
+      !sameProcess(expected, actual) ||
+      actual.startedAt !== expected.startedAt ||
+      actual.sessionFile !== expected.sessionFile
+    )
+      throw new DeploymentHeld("native runtime changed before stop");
+    if (expected.pid === process.pid)
+      throw new DeploymentHeld("replacement controller must run outside the target actor");
+    for (const monitor of record.oldMonitors ?? []) {
+      if (!sameProcess(monitor) || monitor.pid === expected.pid || !underProcess(monitor.pid, expected.pid))
+        throw new DeploymentHeld("monitor identity changed before native stop");
+    }
+    if (record.oldSourceHash && sourceManifest(realpathSync(config.liveSource)).hash !== record.oldSourceHash)
+      throw new DeploymentHeld("previous source changed after its handoff journal");
+    if (ui) await assertNativeUiIdle(config, cli, record, expected);
+    assertRetryDeadline(record);
+    record.stopRequestedAt ??= new Date().toISOString();
+    persist(record);
+    consumeQuiesceCheckpoint(config, record);
+    if (ui) {
+      record.nativeUiExitRequestedAt = new Date().toISOString();
+      persist(record);
+      uiFailure = await requestNativeUiExit(cli, config.pane);
+    } else terminateBoundProcess(expected);
   }
-  if (record.oldSourceHash && sourceManifest(realpathSync(config.liveSource)).hash !== record.oldSourceHash)
-    throw new DeploymentHeld("previous source changed after its handoff journal");
-  assertRetryDeadline(record);
-  record.stopRequestedAt ??= new Date().toISOString();
-  persist(record);
-  consumeQuiesceCheckpoint(config, record);
-  terminateBoundProcess(expected);
   const until = Date.now() + config.stopTimeoutMs;
   while (sameProcess(expected) && Date.now() < until) await Bun.sleep(50);
-  if (sameProcess(expected)) throw new DeploymentHeld("native runtime did not stop within its bound");
+  if (sameProcess(expected)) throw uiFailure ?? new DeploymentHeld("native runtime did not stop within its bound");
   if (processIdentity(expected.pid)) throw new DeploymentHeld("native PID was reused after stop");
   await requireShell(config, cli, expected, until);
 }
@@ -219,17 +229,18 @@ export async function requireShell(
     const seen = await foreground(cli, config.pane, "deployment held");
     if (stopped) {
       const owner = readPaneState(config.stateDir, config.pane);
-      if (
-        processIdentity(stopped.pid) ||
-        (owner && processIdentity(owner.pid)) ||
-        seen.processes?.some(
-          (p) => p.pid !== undefined && (!seen.shell || p.pid !== seen.rootPid) && processIdentity(p.pid),
-        )
-      )
-        throw new DeploymentHeld("native owner changed while awaiting shell");
+      if (processIdentity(stopped.pid))
+        throw shellRejection("native owner changed while awaiting shell (stopped PID is live)", seen, stopped.pid);
+      if (owner && processIdentity(owner.pid))
+        throw shellRejection("native owner changed while awaiting shell (pane owner is live)", seen, owner.pid, owner);
+      const conflict = seen.processes?.find(
+        (p) => p.pid !== undefined && (!seen.shell || p.pid !== seen.rootPid) && processIdentity(p.pid),
+      );
+      if (conflict)
+        throw shellRejection("native owner changed while awaiting shell (foreground PID is live)", seen, conflict.pid);
     }
     if (bareRootShell(config, seen) && (!stopped || Date.now() < until)) return;
-    if (!stopped || Date.now() >= until) throw new DeploymentHeld("target pane is not an observed shell");
+    if (!stopped || Date.now() >= until) throw shellRejection("target pane is not an observed shell", seen);
     await Bun.sleep(Math.min(50, until - Date.now()));
   }
 }

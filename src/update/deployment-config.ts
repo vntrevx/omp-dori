@@ -39,12 +39,19 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     ...required,
     "legacyOmp",
     "stopTimeoutMs",
+    "nativeStopMode",
     "monitorBootstrapFile",
     "quiesceCheckpointFile",
     "shims",
     "herdrSession",
   ]);
   if (Object.keys(value).some((key) => !allowed.has(key))) return fail("unknown setting");
+  const rawStopMode = value["nativeStopMode"];
+  const nativeStopMode = Object.hasOwn(value, "nativeStopMode")
+    ? rawStopMode === "ui" || rawStopMode === "signal"
+      ? rawStopMode
+      : fail("nativeStopMode")
+    : undefined;
   const rawHome = text(value["home"], "home");
   const home =
     rawHome === "~"
@@ -85,6 +92,7 @@ export function parseDeploymentConfig(value: unknown, configDir: string): Deploy
     ...(value["herdrSession"] === undefined ? {} : { herdrSession: text(value["herdrSession"], "herdrSession") }),
     ...(value["monitorBootstrapFile"] === undefined ? {} : { monitorBootstrapFile: path("monitorBootstrapFile") }),
     ...(value["quiesceCheckpointFile"] === undefined ? {} : { quiesceCheckpointFile: path("quiesceCheckpointFile") }),
+    ...(nativeStopMode === undefined ? {} : { nativeStopMode }),
     shims: [],
   };
   if (!/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(config.pane)) return fail("pane");

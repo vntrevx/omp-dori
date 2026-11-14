@@ -21,6 +21,7 @@ export type DeploymentConfig = {
   readonly launcherPath: string;
   readonly healthTimeoutMs: number;
   readonly stopTimeoutMs: number;
+  readonly nativeStopMode?: "ui" | "signal";
   readonly monitorBootstrapFile?: string;
   readonly quiesceCheckpointFile?: string;
   readonly shims: readonly { readonly path: string; readonly source: string }[];
@@ -133,6 +134,7 @@ export type DeploymentRecord = {
   quiesceHash?: string;
   pointers?: readonly PointerRecord[];
   stopRequestedAt?: string;
+  nativeUiExitRequestedAt?: string;
   launchRequestedAt?: string;
   runtime?: RuntimeIdentity;
   launchProcess?: ProcessIdentity;
@@ -144,6 +146,7 @@ export type DeploymentRecord = {
   healthyAt?: string;
   rollbackHealthyAt?: string;
   error?: string;
+  rollbackError?: string;
 };
 export type RuntimeHealth = {
   readonly version: 1;
