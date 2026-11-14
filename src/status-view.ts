@@ -1,7 +1,7 @@
 // The lane board `dori status` prints: open lanes first, the longest without progress on top, closed lanes folded into
 // one line each, every line within WIDTH terminal columns.
 import { ageText, fitEnd, hhmm, oneLine, padCols, wrap } from "./fit.ts";
-import { progressOf } from "./progress.ts";
+import { progressOf, waitingOn, waitingSinceOf } from "./progress.ts";
 import { refText } from "./refs.ts";
 import type { Lane } from "./store-types.ts";
 
@@ -11,7 +11,21 @@ export const WIDTH = 120;
 const BODY_MIN = 40;
 
 /**
- * `key  status  runtime  ref  progress <age> (<since>)  <last entry>`. The key and the ref are never cut (keys share
+ * `<last entry>` for a working lane; a waiting lane's `waiting: <target> since HH:MM | <last entry>`, the target cut
+ * first so the time always shows, the last entry given what is left of `cols`.
+ */
+function tailOf(l: Lane, cols: number): string {
+  const last = l.log.at(-1);
+  const tail = last ? `${last.kind} ${hhmm(last.at)}: ${oneLine(last.text)}` : "";
+  if (l.status !== "waiting") return tail;
+  const until = ` since ${hhmm(waitingSinceOf(l))}`;
+  const waiting = `waiting: ${fitEnd(waitingOn(l), cols - Bun.stringWidth(`waiting: ${until}`))}${until}`;
+  const room = cols - Bun.stringWidth(waiting) - 3;
+  return room > 1 && tail ? `${waiting} | ${fitEnd(tail, room)}` : waiting;
+}
+
+/**
+ * `key  status  runtime  ref  progress <age> (<since>)  <tail>`. The key and the ref are never cut (keys share
  * prefixes, and a cut one names no lane a command can take): their columns are as wide as the widest open lane's, and
  * the rest is cut to the line. When they leave less than BODY_MIN columns, the rest goes on an indented line below.
  */
@@ -23,11 +37,11 @@ function laneLine(l: Lane, now: number, cols: { key: number; ref: number }): str
     padCols(l.sessionRef.runtime, 5),
     padCols(refText(l.sessionRef), cols.ref),
   ].join(" ");
-  const last = l.log.at(-1);
-  const tail = last ? `${last.kind} ${hhmm(last.at)}: ${oneLine(last.text)}` : "";
-  const body = `${padCols(`progress ${ageText(now - since)} (${hhmm(since)})`, 23)} ${tail}`.trimEnd();
-  if (WIDTH - Bun.stringWidth(id) - 1 >= BODY_MIN) return [fitEnd(`${id} ${body}`, WIDTH)];
-  return [...wrap(id.trimEnd(), WIDTH), `  ${fitEnd(body, WIDTH - 2)}`];
+  const progress = padCols(`progress ${ageText(now - since)} (${hhmm(since)})`, 23);
+  const body = (room: number) => fitEnd(`${progress} ${tailOf(l, room - 24)}`.trimEnd(), room);
+  const room = WIDTH - Bun.stringWidth(id) - 1;
+  if (room >= BODY_MIN) return [`${id} ${body(room)}`];
+  return [...wrap(id.trimEnd(), WIDTH), `  ${body(WIDTH - 2)}`];
 }
 
 /** One summary line per closed status: how many, and the one closed last. */

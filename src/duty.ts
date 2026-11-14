@@ -5,7 +5,7 @@ import { flushInbox } from "./inbox.ts";
 import { oweLead, payLead } from "./inbox-files.ts";
 import { Refusal } from "./refusal.ts";
 import { refText } from "./refs.ts";
-import { escalation, progressOf, stalled } from "./progress.ts";
+import { escalation, progressOf, stalled, waitingOn, waitingSinceOf } from "./progress.ts";
 import type { SessionRef } from "./runtime/types.ts";
 import type { Lane } from "./store-types.ts";
 import { ageText, hhmm } from "./fit.ts";
@@ -97,8 +97,8 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
         lane.lastActivityAt = now;
         d.store.saveLane(lane);
       }
-      if (lane.status === "waiting") continue;
-      // The lead hears of a stall whatever the pane is doing: a lane can be busy, blocked or chatty without progress.
+      // The lead hears of a stall whatever the pane is doing: a lane can be busy, blocked, chatty or waiting without
+      // progress. A waiting lane is not exempt: the thing it waits on can be dead.
       if (stalled(lane, now)) {
         // The stall counts as told once the message is in the lead's inbox: from there the inbox delivers it whatever
         // this flush does. It is queued under the stall's id before the lane is marked, so a pass cut short in between
@@ -128,13 +128,15 @@ export async function dutyTick(d: Deps): Promise<DutyEvent[]> {
       const due = NUDGE_MINUTES[lane.nudges];
       if (due === undefined || quietMin < due) continue;
       const since = progressOf(lane);
+      const waiting = lane.status === "waiting";
       // Built and queued before it is counted: a nudge that could not be built or queued is not used up.
-      const text = prompt("nudge.md", {
+      const text = prompt(waiting ? "nudge-waiting.md" : "nudge.md", {
         key: lane.key,
         minutes: String(Math.floor(quietMin)),
         since: hhmm(since),
         age: ageText(now - since),
         dori: d.doriCmd,
+        ...(waiting ? { target: waitingOn(lane), waitingSince: hhmm(waitingSinceOf(lane)) } : {}),
       });
       const ref = lane.sessionRef;
       d.store.enqueueOnce(ref, { at: now, from: "duty", text, id: `nudge:${lane.key}:${since}:${lane.nudges + 1}` });

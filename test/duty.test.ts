@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { main } from "../src/cli.ts";
 import { dutyTick } from "../src/duty.ts";
 import { send } from "../src/inbox.ts";
-import { report, startLane } from "../src/lanes.ts";
+import { startLane } from "../src/lanes.ts";
 import { setup } from "./harness-setup.ts";
 import { href } from "./fake.ts";
 
 describe("duty loop", () => {
-  test("nudges a quiet lane at 10 and 20 minutes, escalates once at 40, and ignores WAITING lanes", async () => {
+  test("nudges a quiet lane at 10 and 20 minutes and escalates once at 40", async () => {
     const { w, d, lead, brief } = setup();
     const lane = await startLane(d, "quiet", brief, { group: "w1" });
     const pane = w.panes.get(lane.paneId)!;
@@ -24,12 +24,6 @@ describe("duty loop", () => {
     expect(await at(40)).toContainEqual({ lane: "quiet", action: "escalated" });
     expect(lead.received.at(-1)).toContain("[ESCALATE quiet]");
     expect(await at(90)).toEqual([]);
-
-    const waiting = await startLane(d, "blocked-on-ci", brief, { group: "w1" });
-    w.panes.get(waiting.paneId)!.status = "idle";
-    await report(d, "blocked-on-ci", "WAITING: CI", { status: "waiting" });
-    w.clock += 60 * 60_000;
-    expect((await dutyTick(d)).filter((e) => e.lane === "blocked-on-ci")).toEqual([]);
   });
 
   test("a failing inbox flush on one pane does not stop the loop for the other panes", async () => {
