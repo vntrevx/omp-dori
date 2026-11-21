@@ -1,4 +1,4 @@
-// OMP v18.20.0 cli/flag-tables.ts STRING_SETTERS; shared by controller and policy argv checks.
+// OMP v19.0.1 cli/flag-tables.ts STRING_SETTERS; shared by controller and policy argv checks.
 export const NATIVE_VALUE_FLAGS: Readonly<Record<string, true>> = {
   "--cwd": true,
   "--config": true,

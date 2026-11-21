@@ -37,7 +37,7 @@ matrixTest(
         child.exited,
       ]);
       expect({ code, err }).toEqual({ code: 0, err: "" });
-      expect(JSON.parse(out)).toEqual({ nativeVersion: expect.stringMatching(/^18\./), cases: 30, networkAttempts: 0 });
+      expect(JSON.parse(out)).toEqual({ nativeVersion: "19.0.1", cases: 30, networkAttempts: 0 });
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

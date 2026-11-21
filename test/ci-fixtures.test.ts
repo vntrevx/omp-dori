@@ -82,14 +82,14 @@ test("a wrong native version cannot pass the prerequisite check", async () => {
   const host = join(f.root, "native");
   mkdirSync(host);
   writeFileSync(join(host, "package.json"), '{"version":"0.0.0"}\n');
-  await expect(checkTestFixtures(f.root, { ...f.env, DORI_TEST_OMP_ROOT: host })).rejects.toThrow("must be 18.20.0");
+  await expect(checkTestFixtures(f.root, { ...f.env, DORI_TEST_OMP_ROOT: host })).rejects.toThrow("must be 19.0.1");
 });
 
 test("same-version metadata outside the imported native host is still refused", async () => {
   const f = fixture();
   const host = join(f.root, "foreign-native");
   mkdirSync(host);
-  writeFileSync(join(host, "package.json"), '{"version":"18.20.0"}\n');
+  writeFileSync(join(host, "package.json"), '{"version":"19.0.1"}\n');
   for (const path of [
     "src/extensibility/extensions/runner.ts",
     "src/extensibility/extensions/loader.ts",

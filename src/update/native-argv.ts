@@ -9,7 +9,7 @@ const OWNED_FLAG =
 
 export const isNativeOwnedFlag = (arg: string): boolean => OWNED_FLAG.test(arg);
 
-// OMP v18.20.0 cli/flag-tables.ts VALUELESS_FLAGS, including the parser's short aliases.
+// OMP v19.0.1 cli/flag-tables.ts VALUELESS_FLAGS, including the parser's short aliases.
 export const NATIVE_BOOLEAN_FLAGS: Readonly<Record<string, true>> = {
   "--help": true,
   "-h": true,
@@ -22,6 +22,9 @@ export const NATIVE_BOOLEAN_FLAGS: Readonly<Record<string, true>> = {
   "--from-codex": true,
   "--no-session": true,
   "--no-tools": true,
+  "--no-judge": true,
+  "--no-spotlight": true,
+  "--offline": true,
   "--no-lsp": true,
   "--no-pty": true,
   "--hide-thinking": true,

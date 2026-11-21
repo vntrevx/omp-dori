@@ -19,7 +19,7 @@ const posix = test.skipIf(process.platform === "win32");
 // Version/argv stubs only; setup records package installs without installing dependencies.
 const executable = `#!/bin/sh
 if [ -n "\${INSTALL_TEST_OMP_PROBE:-}" ]; then printf '%s\\n' "$*" >> "$INSTALL_TEST_OMP_PROBE"; fi
-if [ "\${1:-}" = --version ]; then echo 'omp 18.20.0'; else printf '%s\\0' "$0" "$@"; fi
+if [ "\${1:-}" = --version ]; then echo 'omp 19.0.1'; else printf '%s\\0' "$0" "$@"; fi
 `;
 
 for (const mode of ["primary", "side"]) {

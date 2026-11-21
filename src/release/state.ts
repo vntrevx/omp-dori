@@ -35,7 +35,7 @@ export const releasePath = (paths: ConsumerPaths, manifest: ReleaseManifest): st
 export const manifestPath = (paths: ConsumerPaths, manifest: ReleaseManifest): string =>
   join(paths.manifests, `${releaseId(manifest)}.json`);
 const nativeTarget = (paths: ConsumerPaths, state: InstalledState | undefined): string | undefined =>
-  paths.dori === join(paths.home, ".dori") && state?.current.requirements.omp === "18.20.0"
+  paths.dori === join(paths.home, ".dori") && state?.current.requirements.omp === "19.0.1"
     ? join(releasePath(paths, state.current), "scripts/consumer/omp")
     : undefined;
 

@@ -31,7 +31,7 @@ posix("the same upstream version and launcher bytes cannot satisfy a bound patch
   const launcher = readFileSync(receipt.omp);
   fixtureGit(join(receipt.directory, "source"), "restore", "--source=HEAD", "--staged", "--worktree", "index.ts");
   expect(readFileSync(receipt.omp)).toEqual(launcher);
-  expect(readFileSync(join(receipt.directory, "source/packages/coding-agent/src/cli.ts"), "utf8")).toContain("18.20.0");
+  expect(readFileSync(join(receipt.directory, "source/packages/coding-agent/src/cli.ts"), "utf8")).toContain("19.0.1");
   expect(() => assertNativeSource(f.source, home)).toThrow("source checkout differs");
 });
 
@@ -40,7 +40,7 @@ posix("a version-only stock cache receipt cannot stand in for a source bundle", 
   const home = join(f.root, "home");
   const directory = nativeDirectory(f.source, home);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  writeFileSync(join(directory, "receipt.json"), JSON.stringify({ version: 1, nativeVersion: "18.20.0" }), {
+  writeFileSync(join(directory, "receipt.json"), JSON.stringify({ version: 1, nativeVersion: "19.0.1" }), {
     mode: 0o600,
   });
   expect(() => assertNativeSource(f.source, home)).toThrow("receipt differs");
@@ -85,7 +85,7 @@ posix("a changed patch digest, malformed bound patch and partial install fail wi
 test("new release manifests cannot silently use the older no-lock protocol", () => {
   const old = releaseFixture();
   expect(validateReleaseManifest(old).requirements.omp).toBe("18.18.8");
-  expect(() => validateReleaseManifest({ ...old, requirements: { ...old.requirements, omp: "18.20.0" } })).toThrow(
+  expect(() => validateReleaseManifest({ ...old, requirements: { ...old.requirements, omp: "19.0.1" } })).toThrow(
     "source bundle is incomplete",
   );
   const files = [{ path: "native-omp.lock", sha256: digest("{}"), executable: false }];

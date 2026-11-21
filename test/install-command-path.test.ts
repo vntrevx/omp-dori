@@ -17,7 +17,7 @@ for (const mode of ["primary", "side"]) {
       mkdirSync(join(s.root, "tools"));
       writeFileSync(
         native,
-        '#!/bin/sh\nif [ "$1" = --version ]; then echo 18.20.0; else printf \'%s\\0\' "$0" "$@"; fi\n',
+        '#!/bin/sh\nif [ "$1" = --version ]; then echo 19.0.1; else printf \'%s\\0\' "$0" "$@"; fi\n',
         { mode: 0o755 },
       );
       const nativeBytes = readFileSync(native);

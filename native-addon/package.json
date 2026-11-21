@@ -3,6 +3,6 @@
   "private": true,
   "version": "1.0.0",
   "dependencies": {
-    "@oh-my-pi/pi-natives": "18.20.0"
+    "@oh-my-pi/pi-natives": "19.0.1"
   }
 }

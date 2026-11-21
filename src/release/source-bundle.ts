@@ -10,6 +10,12 @@ import { assertNativeExport } from "./native-export.ts";
 
 export class SourceBundleError extends Error {}
 
+/**
+ * Native versions a bound lock may name: the current default (last) and the earlier bound one that existing managed
+ * receipts and prior releases still carry. Each is admitted only with its own exact source, patch and addon identity.
+ */
+const BOUND_NATIVE_VERSIONS = ["18.20.0", "19.0.1"] as const;
+
 export type SourceBundle = {
   readonly version: 1;
   readonly repository: string;
@@ -17,7 +23,7 @@ export type SourceBundle = {
   readonly patchSha256: string;
   readonly resultTree: string;
   readonly files: readonly SourceEntry[];
-  readonly nativeVersion?: "18.20.0";
+  readonly nativeVersion?: (typeof BOUND_NATIVE_VERSIONS)[number];
   readonly launcher?: string;
 };
 export type BoundBundle = { readonly lock: SourceBundle; readonly patch: string; readonly identity: string };
@@ -57,7 +63,7 @@ export function readSourceBundle(source: string, native = false): BoundBundle {
       (native ? "https://github.com/can1357/oh-my-pi.git" : "https://github.com/dbc-hbin/omp-ulw.git") ||
     !Array.isArray(value.files) ||
     !value.files.length ||
-    (native && (value.nativeVersion !== "18.20.0" || !safe(value.launcher)))
+    (native && (!BOUND_NATIVE_VERSIONS.some((version) => version === value.nativeVersion) || !safe(value.launcher)))
   )
     throw new Error(`Invalid source bundle lock: ${path}`);
   let previous = "";

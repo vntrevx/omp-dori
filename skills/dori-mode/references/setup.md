@@ -8,7 +8,7 @@ The Dori runs its sessions on one of two runtimes through the shared runtime abs
 
 For the first public preview, the live consumer support scope is Linux x64/herdr/Discord, with tested Bun 1.4.4 and native OMP 18.18.8. A manifest explicitly declaring macOS arm64/hc permits the isolated consumer layout; old manifests are Linux only, and this does not claim a macOS release or rollout. Other messengers have separately scoped coverage. Install from a [verified release](../../../docs/releases.md) and use your own provider/bot credentials. Installation starts none of the sessions or monitors below.
 
-Current source `main` and newly built releases instead prepare the reviewed OMP 18.20.0 source bundle and b215 ULW overlay. They require no preinstalled stock OMP or Cargo. Start through the generated `omp` wrapper and read [the source-bundle contract](../../../docs/releases.md#current-source-bundle); the published `v0.1.2` support/installation facts remain historical, not overwritten assets or new QA claims.
+Current source `main` and newly built releases instead prepare the reviewed OMP 19.0.1 source bundle and b215 ULW overlay. They require no preinstalled stock OMP or Cargo. Start through the generated `omp` wrapper and read [the source-bundle contract](../../../docs/releases.md#current-source-bundle); the published `v0.1.2` support/installation facts remain historical, not overwritten assets or new QA claims.
 
 herdr:
 

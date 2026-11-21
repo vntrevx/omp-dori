@@ -130,7 +130,7 @@ cd "$HOME/src/Cataly" || exit 1
 DORI_INSTALL_MODE=side DORI_NO_PULL=1 DORI_SRC="$PWD" bash scripts/install-source.sh
 ```
 
-源码安装器会准备与项目绑定的修改版 OMP 18.20.0 和 ULW 覆盖层；
+源码安装器会准备与项目绑定的修改版 OMP 19.0.1 和 ULW 覆盖层；
 `PATH` 中未经修改的 `omp` 不能替代它们。side 模式默认使用 `~/.omp-dori`，
 保留自己的包装脚本和配置，不影响主安装 `~/.dori`。
 安装不会启动代理、聊天消息接收器或服务。

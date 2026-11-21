@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: |
         host="$GITHUB_WORKSPACE/test/fixtures/omp-native-host/node_modules/@oh-my-pi/pi-coding-agent"
-        bun -e 'const p = await Bun.file(process.argv[1] + "/package.json").json(); if (p.version !== "18.20.0") throw new Error("unexpected native OMP fixture version: " + p.version)' "$host"
+        bun -e 'const p = await Bun.file(process.argv[1] + "/package.json").json(); if (p.version !== "19.0.1") throw new Error("unexpected native OMP fixture version: " + p.version)' "$host"
         printf 'DORI_TEST_OMP_ROOT=%s\n' "$host" >> "$GITHUB_ENV"
     - name: Prepare bound omp-ulw test fixture
       if: ${{ inputs.fixtures == 'all' }}
@@ -46,6 +46,10 @@ runs:
         git -C "$compat" -c advice.detachedHead=false checkout --quiet "$pin"
         test "$(git -C "$compat" rev-parse HEAD)" = "$pin"
         printf 'DORI_TEST_COMPAT_ULW_ENTRY=%s/index.ts\n' "$compat" >> "$GITHUB_ENV"
+    - name: Fetch published consumer rollback baseline
+      if: ${{ inputs.fixtures == 'all' }}
+      shell: bash
+      run: git fetch --no-tags https://github.com/vntrevx/Cataly.git f5d34ab98ad040a500689fbeefe507e54281eff3
     - name: Install root dependencies
       shell: bash
       run: cd "$GITHUB_WORKSPACE" && bun install --frozen-lockfile

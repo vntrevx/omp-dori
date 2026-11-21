@@ -97,7 +97,7 @@ test
           ompEntryHash: digest(readFileSync(config.omp)),
           bun: config.bun,
           bunHash: imageHash,
-          nativeVersion: "18.20.0",
+          nativeVersion: "19.0.1",
           nativeConfig,
           nativeConfigHash: digest(readFileSync(nativeConfig)),
           nativeSource: {

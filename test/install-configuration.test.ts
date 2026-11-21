@@ -56,7 +56,7 @@ posix("source preview never probes the owner-selected OMP executable", () => {
   const s = setup();
   const executable = join(s.root, "owner-omp");
   const calls = join(s.root, "owner-omp.calls");
-  writeFileSync(executable, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$INSTALL_TEST_OMP_CALLS"\nprintf "18.20.0\\n"\n', {
+  writeFileSync(executable, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$INSTALL_TEST_OMP_CALLS"\nprintf "19.0.1\\n"\n', {
     mode: 0o700,
   });
   const result = s.install({ DORI_INSTALL_MODE: "primary", DORI_OMP: executable, INSTALL_TEST_OMP_CALLS: calls }, [

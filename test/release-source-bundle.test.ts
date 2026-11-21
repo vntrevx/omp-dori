@@ -62,7 +62,7 @@ function bundledRelease(f: ConsumerFixture, selected: string, nativeSource?: str
     validateReleaseManifest({
       ...original.bundle.manifest,
       source: publicSource,
-      requirements: { ...original.bundle.manifest.requirements, omp: "18.20.0" },
+      requirements: { ...original.bundle.manifest.requirements, omp: "19.0.1" },
       ompUlw: { repository: ulw.lock.repository, commit: ulw.commit },
     }),
     bytes,

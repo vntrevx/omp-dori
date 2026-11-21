@@ -122,11 +122,11 @@ export function assertNativeSource(
   return receipt;
 }
 
-async function probe(loader: string, cwd: string, home: string, bun: string, natives: string): Promise<string> {
-  const code = `const m = await import(process.argv[1]); const b = m.loadNative();
-if (typeof b.__piNativesBuildVersion !== "function" || b.__piNativesBuildVersion() !== "18.20.0") throw new Error("official native addon version differs");
-const s = m.nativeAddonStatus(); if (!s || s.version !== "18.20.0" || s.stale) throw new Error("native addon identity unavailable"); console.log(s.path);`;
-  return command([bun, "-e", code, loader], cwd, { ...bundleEnv(home, bun), PI_NATIVES_DIR: natives }, 60_000);
+async function probe(loader: string, cwd: string, home: string, bun: string, natives: string, version: string) {
+  const code = `const m = await import(process.argv[1]); const b = m.loadNative(); const v = process.argv[2];
+if (typeof b.__piNativesBuildVersion !== "function" || b.__piNativesBuildVersion() !== v) throw new Error("official native addon version differs");
+const s = m.nativeAddonStatus(); if (!s || s.version !== v || s.stale) throw new Error("native addon identity unavailable"); console.log(s.path);`;
+  return command([bun, "-e", code, loader, version], cwd, { ...bundleEnv(home, bun), PI_NATIVES_DIR: natives }, 60_000);
 }
 
 /** Frozen official addon reuse changes no Rust code and makes no compiled-binary equivalence claim. */
@@ -139,7 +139,8 @@ export async function provisionNativeSource(
   source = realpathSync(source);
   bun = realpathSync(bun);
   const bundle = readSourceBundle(source, true);
-  if (bundle.lock.launcher !== LAUNCHER)
+  const version = bundle.lock.nativeVersion;
+  if (bundle.lock.launcher !== LAUNCHER || !version)
     throw new Error("Native bundle must use the protected upstream omp source launcher");
   // Leased before the existence check, so a prune either keeps this identity or has finished before it is looked at.
   leaseNativeIdentity(home, bundle.identity, holder);
@@ -202,6 +203,7 @@ export async function provisionNativeSource(
       home,
       bun,
       natives,
+      version,
     );
     if (
       !regularFile(official) ||
@@ -212,8 +214,9 @@ export async function provisionNativeSource(
     const target = join(checkout, "packages/natives/native", basename(official));
     copyFileSync(official, target);
     if (
-      resolve(await probe(join(checkout, "packages/natives/native/loader-state.js"), stage, home, bun, natives)) !==
-      target
+      resolve(
+        await probe(join(checkout, "packages/natives/native/loader-state.js"), stage, home, bun, natives, version),
+      ) !== target
     )
       throw new Error("Bound source did not load the exact version-matched official addon");
     symlinkSync(bun, join(stage, "bin/bun"));

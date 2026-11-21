@@ -50,7 +50,7 @@ try {
   assert.equal(report?.provenance?.nativeRef?.sessionId, lane.session);
   assert.equal(report?.provenance?.requestId, lane.requestId);
   assert.equal(networkAttempts, 0);
-  console.log(JSON.stringify({ runId, requestId: lane.requestId, networkAttempts, nativeVersion: "18.20.0" }));
+  console.log(JSON.stringify({ runId, requestId: lane.requestId, networkAttempts, nativeVersion: "19.0.1" }));
 } finally {
   releaseShellSessions(lane.session);
 }

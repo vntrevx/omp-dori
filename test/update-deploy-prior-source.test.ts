@@ -27,7 +27,7 @@ async function conversion(sameOverlay: boolean) {
   roots.push(root);
   const omp = join(root, "private-omp/omp");
   mkdirSync(join(root, "private-omp"), { mode: 0o700 });
-  writeFileSync(omp, '#!/bin/sh\nprintf "18.20.0\\n"\n', { mode: 0o700 });
+  writeFileSync(omp, '#!/bin/sh\nprintf "19.0.1\\n"\n', { mode: 0o700 });
   const config = { ...deploymentConfig(root), omp, bun: process.execPath };
   ownReleaseRoot(config);
   const release = join(config.releaseRoot, "releases/new");

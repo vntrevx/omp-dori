@@ -81,7 +81,7 @@ export async function requiredSourceRequest(
       model,
       settings,
       bindProcessState: false,
-      cacheWarming: false,
+      cacheWarming: "off",
       disableModelFallback: true,
       toolNames: [],
       disableExtensionDiscovery: true,

@@ -54,13 +54,13 @@ if (import.meta.main) {
   assert.equal(verifyRelease(paths, expected), source);
   assert.equal(source, releasePath(paths, expected));
   if (previous) verifyRelease(paths, previous);
-  assert.equal(expected.requirements.omp, "18.20.0");
+  assert.equal(expected.requirements.omp, "19.0.1");
   const native: NativeReceipt = assertNativeSource(source, home);
   process.env["PI_NATIVES_DIR"] = join(native.directory, "natives");
   const loader = await import(join(native.directory, "source/packages/natives/native/loader-state.js"));
-  assert.equal(loader.loadNative().__piNativesBuildVersion(), "18.20.0");
+  assert.equal(loader.loadNative().__piNativesBuildVersion(), "19.0.1");
   const addon = loader.nativeAddonStatus();
-  assert.equal(addon.version, "18.20.0");
+  assert.equal(addon.version, "19.0.1");
   assert.equal(addon.stale, false);
   assert.equal(realpathSync(addon.path), realpathSync(native.addon));
   const config: DoriConfig = await loadConfig(paths.config, home);

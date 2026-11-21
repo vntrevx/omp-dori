@@ -17,7 +17,7 @@ posix.each(["tools", "./tools", ".", "tools with 'quote'; literal", "absolute"])
     const native = join(s.root, "selected-omp");
     writeFileSync(
       native,
-      '#!/bin/sh\nif [ "$1" = --version ]; then echo 18.20.0; else printf \'%s\\0\' "$0" "$@"; fi\n',
+      '#!/bin/sh\nif [ "$1" = --version ]; then echo 19.0.1; else printf \'%s\\0\' "$0" "$@"; fi\n',
       { mode: 0o755 },
     );
     const env = s.env({

@@ -78,9 +78,9 @@ export async function inspectRuntimeToolchain(
   if (
     !legacy &&
     lstatSync(join(record.releasePath, "native-omp.lock"), { throwIfNoEntry: false }) &&
-    match[1] !== "18.20.0"
+    match[1] !== readSourceBundle(record.releasePath, true).lock.nativeVersion
   )
-    throw new DeploymentHeld("new source bundles require native OMP 18.20.0");
+    throw new DeploymentHeld("source bundles require the native OMP version their lock binds");
   const ompEntry = realpathSync(omp);
   return {
     omp,

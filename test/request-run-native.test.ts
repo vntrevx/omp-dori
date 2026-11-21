@@ -54,7 +54,7 @@ test.skipIf(process.platform === "win32")(
           runId,
           requestId: "discord:111111111111111111:222222222222222222",
           networkAttempts: 0,
-          nativeVersion: "18.20.0",
+          nativeVersion: "19.0.1",
         },
         { restartRun: "" },
       ]);

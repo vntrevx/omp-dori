@@ -100,7 +100,7 @@ it("a same-version old-style receipt cannot admit a new locked default", async (
     ompEntryHash: digest(readFileSync(f.receipt.omp)),
     bun: f.config.bun,
     bunHash: digest(readFileSync(f.config.bun)),
-    nativeVersion: "18.20.0",
+    nativeVersion: "19.0.1",
     nativeConfig: join(f.config.releaseRoot, "native-config.json"),
     nativeConfigHash: digest("{}"),
   };

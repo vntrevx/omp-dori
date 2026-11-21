@@ -72,7 +72,7 @@ const findCall = (branch: Branch, id: string): ToolCall | undefined => {
   return undefined;
 };
 // Why a call reports, messages or coordinates rather than does work, or why that is not known; `session` is the
-// session cwd it was called in, if known. A shell command is read in the directory it started in (pinned omp 18.20.0
+// session cwd it was called in, if known. A shell command is read in the directory it started in (pinned omp 19.0.1
 // bash, pi-tui BashToolDetails.cwd): the call's own `cwd`, as omp resolved it into `details.cwd`; without one, the
 // session cwd, which its leading `cd` (hoisted by omp into `details.cwd`, off the script it runs) then moves as the
 // command itself reads. An explicit cwd prevents native leading-cd hoisting, so it is not applied twice.

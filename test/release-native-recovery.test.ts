@@ -26,8 +26,13 @@ for (const legacy of [false, true]) {
     expect(loadInstalled(f.paths)).toEqual(after);
     expect(recoverInstalled(f.paths)).toEqual(after);
     expect(readFileSync(f.paths.config)).toEqual(config);
-    expect((await rollbackRelease(f.paths, after)).current).toEqual(before.current);
-    expect(pointer(omp)).toBe(currentNative);
+    if (legacy) {
+      expect(after.previous).toBeUndefined();
+      await expect(rollbackRelease(f.paths, after)).rejects.toThrow("No retained previous release");
+    } else {
+      expect((await rollbackRelease(f.paths, after)).current).toEqual(before.current);
+      expect(pointer(omp)).toBe(currentNative);
+    }
   });
 
   posix(`${transition} preparation failure before journaling preserves the active native command`, async () => {

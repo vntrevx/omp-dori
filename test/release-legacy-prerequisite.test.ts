@@ -20,7 +20,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(version = "18.20.0") {
+function fixture(version = "19.0.1") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "dori-legacy-prerequisite-")));
   roots.push(root);
   const home = join(root, "home");

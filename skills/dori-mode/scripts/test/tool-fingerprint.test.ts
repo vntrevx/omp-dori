@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { resultFingerprint } from "../src/tool-fingerprint.ts";
 
-// Text layouts of OMP 18.20.0: bash #buildCompletedResult puts the wall time first among its notices
+// Text layouts of OMP 18.20.0 (kept in 19.0.1 except the spill URL, below): bash #buildCompletedResult puts the wall time first among its notices
 // (`out`, "", wall time, notices...), and formatOutputNotice appends `\n\n[...]` citing the artifact in details.meta.
 const busy = "Ran in a copy of the busy session shell; changes here won't persist.";
 const clamp = "Timeout clamped to 3600 seconds.";
@@ -92,5 +92,48 @@ describe("native artifact locators", () => {
     expect(print(`tail\n\n[user data artifact://3]`, truncated("3"))).not.toBe(
       print(`tail\n\n[user data artifact://]`, truncated("3")),
     );
+  });
+
+  // OMP 19.0 spells the same spills `local://N.log` (pi-utils spillUrl) in notices, footers and cut-line selectors.
+  describe("19.x local spills", () => {
+    const spillNotice = (id: string) => `[Showing lines 41-50 of 50. Read local://${id}.log for full output]`;
+    const cut = (id: string) => ({
+      meta: { limits: { columnTruncated: { maxColumn: 512, selectorBase: `local://${id}.log` } } },
+    });
+
+    test("the spill the metadata names is not evidence; the truncation data is", () => {
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).toBe(
+        print(`tail\n\n${spillNotice("9")}`, truncated("9")),
+      );
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${spillNotice("9")}`, truncated("9", 51)),
+      );
+      expect(print("ok\n[raw output: local://4.log]", minimized("4"))).toBe(
+        print("ok\n[raw output: local://8.log]", minimized("8")),
+      );
+      const cutNotice = (id: string) =>
+        `[Some lines truncated to 512 chars. Use local://${id}.log:raw:1-1 to read line 1 whole]`;
+      expect(print(`wide\n\n${cutNotice("3")}`, cut("3"))).toBe(print(`wide\n\n${cutNotice("7")}`, cut("7")));
+    });
+
+    test("spill text the metadata does not name stays data, and the two schemes stay distinct", () => {
+      expect(print(`see local://3.log\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`see local://.log\n\n${spillNotice("3")}`, truncated("3")),
+      );
+      expect(print("ok\n[raw output: local://4.log]", minimized("8"))).not.toBe(
+        print("ok\n[raw output: local://5.log]", minimized("8")),
+      );
+      expect(print(`tail\n\n${spillNotice("31")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${spillNotice("32")}`, truncated("3")),
+      );
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${notice("3")}`, truncated("3")),
+      );
+      // A named local:// file is the read's own source, not a spill: distinct files stay distinct evidence.
+      const named = (file: string) => ({
+        meta: { limits: { columnTruncated: { maxColumn: 512, selectorBase: `local://${file}.log` } } },
+      });
+      expect(print("wide", named("build"), "read")).not.toBe(print("wide", named("deploy"), "read"));
+    });
   });
 });

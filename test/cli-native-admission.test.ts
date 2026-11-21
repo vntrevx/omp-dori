@@ -24,7 +24,7 @@ posix("a lightweight command in a consumer release still validates every native 
   const receipt = nativeCacheFixture(source, home, f.checkout);
   const manifests = join(home, ".dori/releases/consumer-manifests");
   mkdirSync(manifests, { recursive: true, mode: 0o700 });
-  writeFileSync(join(manifests, `${basename(source)}.json`), JSON.stringify({ requirements: { omp: "18.20.0" } }), {
+  writeFileSync(join(manifests, `${basename(source)}.json`), JSON.stringify({ requirements: { omp: "19.0.1" } }), {
     mode: 0o600,
   });
   const state = join(home, "state");

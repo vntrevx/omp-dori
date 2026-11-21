@@ -50,14 +50,27 @@ const withoutWallTime = (text: string, wallTimeMs: unknown): string => {
 };
 
 type ArtifactIds = { readonly notice: readonly string[]; readonly footer: readonly string[] };
+// How omp spells a spill: `artifact://N` up to 18.x, `local://N.log` from 19.0. Each emptied form keeps its scheme, so
+// results from the two versions stay distinct.
+const SPILLS = [
+  { url: (id: string) => `artifact://${id}`, blank: "artifact://", tail: "(?![\\w-])", base: /^artifact:\/\/(.+)$/ },
+  {
+    url: (id: string) => `local://${id}.log`,
+    blank: "local://.log",
+    tail: "(?![\\w.-])",
+    base: /^local:\/\/(\d+)\.log$/,
+  },
+] as const;
+const selectorId = (base: string): string | undefined =>
+  SPILLS.map((spill) => base.match(spill.base)?.[1]).find((id) => id !== undefined);
+
 /**
  * The artifact ids omp's output metadata names: those its trailing output notice cites (truncation, cut lines) and
- * those a `[raw output: artifact://N]` footer line names (the raw capture, the minimizer's original).
+ * those a `[raw output: <spill>]` footer line names (the raw capture, the minimizer's original).
  */
 const artifactIds = (meta: OutputMeta | undefined): ArtifactIds => {
   const cut = meta?.limits?.columnTruncated;
-  const selector =
-    typeof cut?.selectorBase === "string" ? cut.selectorBase.match(/^artifact:\/\/(.+)$/)?.[1] : undefined;
+  const selector = typeof cut?.selectorBase === "string" ? selectorId(cut.selectorBase) : undefined;
   const ids = (values: unknown[]): string[] =>
     values.filter((value): value is string => typeof value === "string" && value !== "");
   return {
@@ -74,8 +87,10 @@ const withoutLocators = (text: string, ids: ArtifactIds, name: string, details: 
   const nativeSuffix = (line: string): boolean =>
     line === "" ||
     OUTPUT_NOTICE.test(line) ||
-    line === "[raw output: artifact://]" ||
-    ids.footer.some((id) => line === `[raw output: artifact://${id}]`) ||
+    SPILLS.some(
+      (spill) =>
+        line === `[raw output: ${spill.blank}]` || ids.footer.some((id) => line === `[raw output: ${spill.url(id)}]`),
+    ) ||
     (name === "bash" &&
       (line === "Ran in a copy of the busy session shell; changes here won't persist." ||
         (typeof details["timeoutSeconds"] === "number" &&
@@ -85,22 +100,25 @@ const withoutLocators = (text: string, ids: ArtifactIds, name: string, details: 
           ) &&
           line.endsWith("s)."))));
   // A native footer ends the output body; only other native notices may follow it, never arbitrary output lines.
-  for (const id of ids.footer) {
-    const footer = `[raw output: artifact://${id}]`;
-    let at = out.lastIndexOf(footer);
-    while (at > 0 && out[at - 1] !== "\n") at = out.lastIndexOf(footer, at - 1);
-    const end = at + footer.length;
-    if (at !== -1 && (end === out.length || out[end] === "\n") && out.slice(end).split("\n").every(nativeSuffix))
-      out = `${out.slice(0, at)}[raw output: artifact://]${out.slice(end)}`;
-  }
+  for (const spill of SPILLS)
+    for (const id of ids.footer) {
+      const footer = `[raw output: ${spill.url(id)}]`;
+      let at = out.lastIndexOf(footer);
+      while (at > 0 && out[at - 1] !== "\n") at = out.lastIndexOf(footer, at - 1);
+      const end = at + footer.length;
+      if (at !== -1 && (end === out.length || out[end] === "\n") && out.slice(end).split("\n").every(nativeSuffix))
+        out = `${out.slice(0, at)}[raw output: ${spill.blank}]${out.slice(end)}`;
+    }
   // omp's output notice: one bracketed line after a blank line, last in the result.
   const start = out.lastIndexOf("\n\n[");
   if (ids.notice.length === 0 || start === -1 || !OUTPUT_NOTICE.test(out.slice(start + 2))) return out;
   let notice = out.slice(start);
-  for (const id of ids.notice) {
-    const locator = new RegExp(`artifact://${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`, "g");
-    notice = notice.replace(locator, "artifact://");
-  }
+  for (const spill of SPILLS)
+    for (const id of ids.notice)
+      notice = notice.replace(
+        new RegExp(`${spill.url(id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${spill.tail}`, "g"),
+        spill.blank,
+      );
   return out.slice(0, start) + notice;
 };
 
@@ -114,7 +132,7 @@ const metaWithoutLocators = (meta: OutputMeta): OutputMeta => {
   delete copy.minimized?.artifactId;
   const cut = copy.limits?.columnTruncated;
   delete cut?.artifactId;
-  if (typeof cut?.selectorBase === "string" && cut.selectorBase.startsWith("artifact://")) delete cut.selectorBase;
+  if (typeof cut?.selectorBase === "string" && selectorId(cut.selectorBase) !== undefined) delete cut.selectorBase;
   return copy;
 };
 

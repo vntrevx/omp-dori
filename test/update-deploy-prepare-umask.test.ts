@@ -41,7 +41,7 @@ it.each(["0000", "0002", "0077"])(
     };
     await provisionSourceOverlay(f.candidate, f.home, undefined, ulw.checkout);
     const native = join(f.directory, "native-version-fixture");
-    writeFileSync(native, '#!/bin/sh\nprintf "18.20.0\\n"\n', { mode: 0o700 });
+    writeFileSync(native, '#!/bin/sh\nprintf "19.0.1\\n"\n', { mode: 0o700 });
     const config = { ...f.config, omp: native };
     const record = { ...f.record, commit: input.commit, tree: input.tree, sourceHash: full.hash };
     const payload = join(f.directory, "prepare-input.json");
@@ -75,7 +75,7 @@ console.log(JSON.stringify({ before, after: process.umask(), record }));
     expect(observed.before).toBe(Number.parseInt(mask, 8));
     expect(observed.after).toBe(observed.before);
     expect(observed.record.toolchain.nativeOverride).toBe(true);
-    expect(observed.record.toolchain.nativeVersion).toBe("18.20.0");
+    expect(observed.record.toolchain.nativeVersion).toBe("19.0.1");
     expect(observed.record.toolchain.ompUlw.identity).toBe(readSourceBundle(f.candidate).identity);
     expect(sourceManifest(record.releasePath).hash).toBe(full.hash);
     expect(sourceManifest(f.candidate)).toEqual(full);

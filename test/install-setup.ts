@@ -86,7 +86,7 @@ export function setup() {
   chmodSync(join(bin, "bun"), 0o755);
   writeFileSync(
     join(bin, "omp"),
-    `#!/bin/sh\ncase "$1" in\n--version) echo "omp \${INSTALL_TEST_OMP_VERSION:-18.20.0}" ;;\n*) exit 64 ;;\nesac\n`,
+    `#!/bin/sh\ncase "$1" in\n--version) echo "omp \${INSTALL_TEST_OMP_VERSION:-19.0.1}" ;;\n*) exit 64 ;;\nesac\n`,
   );
   chmodSync(join(bin, "omp"), 0o755);
   const upstreamCommit = (text: string) => {

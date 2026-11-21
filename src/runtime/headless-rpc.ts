@@ -50,8 +50,8 @@ export async function startRpc(
     timeout: RPC_TIMEOUT,
   });
   const [printed, code] = await Promise.all([new Response(version.stdout).text(), version.exited]);
-  if (code !== 0 || !/^(?:omp\s+)?18\.20\.0$/im.test(printed.trim()))
-    throw new Error("headless lanes require OMP 18.20.0");
+  if (code !== 0 || !/^(?:omp\s+)?19\.0\.1$/im.test(printed.trim()))
+    throw new Error("headless lanes require OMP 19.0.1");
   return new HeadlessRpc(
     [...start.argv, "--mode", "rpc-ui", "--approval-mode", "always-ask", "--config", overlay],
     { cwd, env },

@@ -59,7 +59,7 @@ export const readUsageHeader = async (path: string) => {
   }
 };
 
-/** OMP 18.20.0 session-entries.ts: assistant messages and model_usage are separate billed calls.
+/** OMP 19.0.1 session-entries.ts: assistant messages and model_usage are separate billed calls.
  * Task result aggregates are deliberately excluded: verified child files supply their own calls.
  * Cache only numeric usage, IDs and timestamps, never conversation content. Changed files are rebuilt,
  * so replacement/truncation and discarded-turn model_usage rewrites cannot retain old spend. */

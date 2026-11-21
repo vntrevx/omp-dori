@@ -152,7 +152,7 @@ export function validateReleaseManifest(value: unknown): ReleaseManifest {
     platform: "linux",
     arch: "x64",
     bun: "1.4.4",
-    omp: requirements["omp"] === "18.18.8" ? "18.18.8" : "18.20.0",
+    omp: requirements["omp"] === "18.18.8" ? "18.18.8" : "19.0.1",
     runtime: "herdr",
     messenger: "discord",
   } as const;
@@ -171,7 +171,7 @@ export function validateReleaseManifest(value: unknown): ReleaseManifest {
     )
   )
     throw new Error("New source-bundle payloads cannot use the older no-lock release protocol");
-  if (supported.omp === "18.20.0") {
+  if (supported.omp === "19.0.1") {
     for (const path of [
       "omp-ulw.lock",
       "omp-ulw.overlay.lock",
