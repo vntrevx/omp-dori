@@ -20,7 +20,7 @@ const prefixes = [
   ["omp-dori", "omp"],
   ["env", "-i", "--", "omp"],
   ["npm", "exec", "--", "omp"],
-  ["npx", "--yes", "@oh-my-pi/pi-coding-agent@18.20.0"],
+  ["npx", "--yes", "@oh-my-pi/pi-coding-agent@19.0.1"],
   ["bun", "run", "--preload=/fixture/hook.ts", "/fixture/omp"],
   ["node", "--no-warnings", "/fixture/omp"],
   ["bun", "--preload", `${source}scripts/omp.ts`, `${source}src/cli.ts`],

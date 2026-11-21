@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { parseArgs } from "node:util";
 import { validateReleaseManifest } from "../src/release/manifest.ts";
+import { readSourceBundle } from "../src/release/source-bundle.ts";
 import { digest } from "../src/update/source.ts";
 
 const { values, positionals } = parseArgs({
@@ -31,7 +32,7 @@ const manifest = validateReleaseManifest(
 assert.equal(source, join(side, "releases/releases", `${manifest.commit}-${manifest.source.hash.slice(0, 16)}`));
 assert.equal(realpathSync(join(side, "src")), source, "Installed source differs from the explicitly expected release");
 assert.deepEqual(JSON.parse(readFileSync(join(side, "releases/consumer-installed.json"), "utf8")).current, manifest);
-assert.equal(manifest.requirements.omp, "18.20.0");
+assert.equal(manifest.requirements.omp, readSourceBundle(source, true).lock.nativeVersion);
 const harness = manifest.source.files.find((file) => file.path === "src/harness.ts");
 assert(harness, "Admitted release must contain its actual harness");
 const harnessHash = digest(readFileSync(join(source, harness.path)));

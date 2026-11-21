@@ -68,7 +68,7 @@ export function previewConsumerSetup(paths: ConsumerPaths, bundle: VerifiedBundl
     extractArchive(bundle.files, bundle.manifest, source);
     assertLock(source, bundle.manifest);
     const dependency = join(dependencyPlan(paths, bundle.manifest, source).directory, "index.ts");
-    plan = consumerConfigPlan(paths, snapshot, source, dependency, bundle.manifest.requirements.omp === "18.20.0");
+    plan = consumerConfigPlan(paths, snapshot, source, dependency, bundle.manifest.requirements.omp !== "18.18.8");
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }

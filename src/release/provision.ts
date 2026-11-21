@@ -119,7 +119,7 @@ async function git(args: readonly string[], cwd: string, home: string): Promise<
 
 export function dependencyPlan(paths: ConsumerPaths, manifest: ReleaseManifest, source?: string) {
   const { commit, repository } = manifest.ompUlw;
-  const bundle = manifest.requirements.omp === "18.20.0" ? readSourceBundle(source!, false) : undefined;
+  const bundle = manifest.requirements.omp !== "18.18.8" ? readSourceBundle(source!, false) : undefined;
   if (bundle && (bundle.lock.commit !== commit || bundle.lock.repository !== repository))
     throw new Error("Release overlay differs from its upstream dependency pin");
   const dependency = join(paths.dependencies, `omp-ulw-${commit}${bundle ? `-${bundle.identity}` : ""}`);
@@ -182,7 +182,7 @@ export async function provisionDependency(
 export function assertLock(source: string, manifest: ReleaseManifest): void {
   if (readFileSync(join(source, "omp-ulw.lock"), "utf8").trim() !== manifest.ompUlw.commit)
     throw new Error("Release omp-ulw.lock differs from its declared public pin");
-  if (manifest.requirements.omp === "18.20.0") {
+  if (manifest.requirements.omp !== "18.18.8") {
     const overlay = readSourceBundle(source);
     const native = readSourceBundle(source, true);
     if (overlay.lock.commit !== manifest.ompUlw.commit || native.lock.nativeVersion !== manifest.requirements.omp)

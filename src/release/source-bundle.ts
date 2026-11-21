@@ -17,7 +17,7 @@ export type SourceBundle = {
   readonly patchSha256: string;
   readonly resultTree: string;
   readonly files: readonly SourceEntry[];
-  readonly nativeVersion?: "18.20.0";
+  readonly nativeVersion?: string;
   readonly launcher?: string;
 };
 export type BoundBundle = { readonly lock: SourceBundle; readonly patch: string; readonly identity: string };
@@ -57,7 +57,10 @@ export function readSourceBundle(source: string, native = false): BoundBundle {
       (native ? "https://github.com/can1357/oh-my-pi.git" : "https://github.com/dbc-hbin/omp-ulw.git") ||
     !Array.isArray(value.files) ||
     !value.files.length ||
-    (native && (value.nativeVersion !== "18.20.0" || !safe(value.launcher)))
+    (native &&
+      (typeof value.nativeVersion !== "string" ||
+        !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value.nativeVersion) ||
+        !safe(value.launcher)))
   )
     throw new Error(`Invalid source bundle lock: ${path}`);
   let previous = "";
@@ -100,8 +103,11 @@ export const bundleEnv = (home: string, bun = process.execPath): Record<string, 
   DORI_TELEMETRY: "0",
   DO_NOT_TRACK: "1",
 });
-export const bundleGit = (argv: readonly string[], cwd: string, home: string): Promise<string> =>
-  command(["/bin/sh", "-c", 'umask 077; exec "$@"', "dori-source-git", ...args(argv)], cwd, bundleEnv(home), 300_000);
+export const bundleGit = (argv: readonly string[], cwd: string, home: string, output?: string): Promise<string> => {
+  const script = output === undefined ? 'umask 077; exec "$@"' : 'umask 077; output=$1; shift; exec "$@" > "$output"';
+  const shell = ["/bin/sh", "-c", script, "dori-source-git", ...(output === undefined ? [] : [output])];
+  return command([...shell, ...args(argv)], cwd, bundleEnv(home), 300_000);
+};
 
 function hashChunks(inputs: readonly string[], checkout: string, home: string): string {
   // One synchronous Bun driver keeps admission synchronous while Git children hash in parallel.
@@ -135,8 +141,7 @@ if (!process.exitCode) process.stdout.write(outputs.join(""));
   return proc.stdout.toString().trim();
 }
 
-/**
- * Synchronous admission also runs at launch; a version or a launcher hash alone is never a receipt.
+/** Synchronous admission also runs at launch; a version or a launcher hash alone is never a receipt.
  * Every tracked regular file's content is compared to its index blob through batched attribute-aware
  * hashes, so a legitimate checkout transform is admitted and any real content change is still rejected.
  */

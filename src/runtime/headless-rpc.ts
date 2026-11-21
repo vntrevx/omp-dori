@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { isOmpArgv } from "./omp-argv.ts";
 import { object } from "./headless-protocol.ts";
 import type { HostStart } from "./headless-record.ts";
@@ -50,8 +51,10 @@ export async function startRpc(
     timeout: RPC_TIMEOUT,
   });
   const [printed, code] = await Promise.all([new Response(version.stdout).text(), version.exited]);
-  if (code !== 0 || !/^(?:omp\s+)?18\.20\.0$/im.test(printed.trim()))
-    throw new Error("headless lanes require OMP 18.20.0");
+  const required = JSON.parse(readFileSync(new URL("../../native-omp.lock", import.meta.url), "utf8"))
+    .nativeVersion as string;
+  if (code !== 0 || !printed.split("\n").some((line) => line.trim().replace(/^omp\s+/i, "") === required))
+    throw new Error(`headless lanes require OMP ${required}`);
   return new HeadlessRpc(
     [...start.argv, "--mode", "rpc-ui", "--approval-mode", "always-ask", "--config", overlay],
     { cwd, env },

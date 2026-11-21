@@ -145,7 +145,7 @@ cd "$HOME/src/Cataly" || exit 1
 DORI_INSTALL_MODE=side DORI_NO_PULL=1 DORI_SRC="$PWD" bash scripts/install-source.sh
 ```
 
-L'installer da sorgente prepara OMP 18.20.0 con le modifiche e i vincoli del progetto
+L'installer da sorgente prepara OMP 19.0.1 con le modifiche e i vincoli del progetto
 e l'overlay ULW; un `omp` standard nel `PATH` non può sostituirli. La modalità side
 usa per impostazione predefinita `~/.omp-dori`, mantiene wrapper e configurazione
 propri e lascia intatta l'installazione primaria `~/.dori`.

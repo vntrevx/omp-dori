@@ -161,7 +161,7 @@ It does not contain the newer `main` features or toolchain.
 ### Work from current source
 
 Use a separate checkout with git, Bun 1.4.4+, and your chosen runtime (herdr or
-hc). The default source installer prepares the pinned, patched **OMP 18.20.0**
+hc). The default source installer prepares the pinned, patched **OMP 19.0.1**
 and **omp-ulw** overlay; a stock `omp` is not a substitute. No preinstalled OMP
 or Cargo is needed for this default setup.
 

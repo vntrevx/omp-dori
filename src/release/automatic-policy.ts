@@ -60,8 +60,8 @@ export async function verifyAutomaticInstallation(paths: ConsumerPaths, state: I
   }
   const source = verifyRelease(paths, state.current);
   if (state.previous) verifyRelease(paths, state.previous);
-  if (state.current.requirements.omp === "18.20.0") assertNativeSource(source, paths.home);
-  const suffix = state.current.requirements.omp === "18.20.0" ? `-${readSourceBundle(source).identity}` : "";
+  if (state.current.requirements.omp !== "18.18.8") assertNativeSource(source, paths.home);
+  const suffix = state.current.requirements.omp !== "18.18.8" ? `-${readSourceBundle(source).identity}` : "";
   const dependency = join(paths.dependencies, `omp-ulw-${state.current.ompUlw.commit}${suffix}`);
   realDirectory(dependency);
   if (!regularFile(join(dependency, "index.ts")))

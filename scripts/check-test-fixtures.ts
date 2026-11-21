@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { assertNativeHost } from "../test/fixtures/omp-native-host/host.ts";
+import fixture from "../test/fixtures/omp-native-host/package.json";
 
 /** Check prerequisites only; the unchanged native tests still prove fixture behavior. */
 export async function checkTestFixtures(
@@ -21,7 +22,9 @@ export async function checkTestFixtures(
 if (import.meta.main) {
   try {
     await checkTestFixtures(resolve(import.meta.dir, ".."));
-    console.log("CI_FIXTURES_OK native=18.20.0 ulw=present compatibility=present");
+    console.log(
+      `CI_FIXTURES_OK native=${fixture.dependencies["@oh-my-pi/pi-coding-agent"]} ulw=present compatibility=present`,
+    );
   } catch (error) {
     console.error(`CI_FIXTURES_FAIL: ${error instanceof Error ? error.message : String(error)}`);
     console.error("Prepare the exact fixtures in CONTRIBUTING.md#run-the-gates before running the full gate.");

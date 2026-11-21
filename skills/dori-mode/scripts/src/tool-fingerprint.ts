@@ -52,7 +52,7 @@ const withoutWallTime = (text: string, wallTimeMs: unknown): string => {
 type ArtifactIds = { readonly notice: readonly string[]; readonly footer: readonly string[] };
 /**
  * The artifact ids omp's output metadata names: those its trailing output notice cites (truncation, cut lines) and
- * those a `[raw output: artifact://N]` footer line names (the raw capture, the minimizer's original).
+ * those a raw-output footer names (the raw capture, the minimizer's original).
  */
 const artifactIds = (meta: OutputMeta | undefined): ArtifactIds => {
   const cut = meta?.limits?.columnTruncated;
@@ -67,15 +67,29 @@ const artifactIds = (meta: OutputMeta | undefined): ArtifactIds => {
 };
 
 const OUTPUT_NOTICE = /^\[(?:Showing |Some lines truncated to |\d+ (?:matches|results) limit reached\b).*\]$/;
+const LOCAL_SPILL = "local://.log";
+const numberedSpill = (id: unknown): string | undefined =>
+  typeof id === "string" && /^\d+$/.test(id) ? `local://${id}.log` : undefined;
+const spillSelectorBase = (base: unknown): string | undefined =>
+  typeof base === "string" && /^local:\/\/\d+\.log$/.test(base) ? base : undefined;
+const rawFooter = (url: string): string => `[raw output: ${url}]`;
 
 /** The text with the artifact locators omp's metadata names emptied where omp writes them; the output is kept. */
-const withoutLocators = (text: string, ids: ArtifactIds, name: string, details: Details): string => {
+const withoutLocators = (text: string, meta: OutputMeta | undefined, name: string, details: Details): string => {
+  const ids = artifactIds(meta);
+  const footers = new Map<string, string>();
+  for (const id of ids.footer) {
+    footers.set(rawFooter(`artifact://${id}`), rawFooter("artifact://"));
+    const spill = numberedSpill(id);
+    if (spill) footers.set(rawFooter(spill), rawFooter(LOCAL_SPILL));
+  }
   let out = text;
   const nativeSuffix = (line: string): boolean =>
     line === "" ||
     OUTPUT_NOTICE.test(line) ||
-    line === "[raw output: artifact://]" ||
-    ids.footer.some((id) => line === `[raw output: artifact://${id}]`) ||
+    line === rawFooter("artifact://") ||
+    line === rawFooter(LOCAL_SPILL) ||
+    footers.has(line) ||
     (name === "bash" &&
       (line === "Ran in a copy of the busy session shell; changes here won't persist." ||
         (typeof details["timeoutSeconds"] === "number" &&
@@ -85,22 +99,33 @@ const withoutLocators = (text: string, ids: ArtifactIds, name: string, details: 
           ) &&
           line.endsWith("s)."))));
   // A native footer ends the output body; only other native notices may follow it, never arbitrary output lines.
-  for (const id of ids.footer) {
-    const footer = `[raw output: artifact://${id}]`;
+  for (const [footer, normalized] of footers) {
     let at = out.lastIndexOf(footer);
     while (at > 0 && out[at - 1] !== "\n") at = out.lastIndexOf(footer, at - 1);
     const end = at + footer.length;
     if (at !== -1 && (end === out.length || out[end] === "\n") && out.slice(end).split("\n").every(nativeSuffix))
-      out = `${out.slice(0, at)}[raw output: artifact://]${out.slice(end)}`;
+      out = out.slice(0, at) + normalized + out.slice(end);
   }
   // omp's output notice: one bracketed line after a blank line, last in the result.
   const start = out.lastIndexOf("\n\n[");
-  if (ids.notice.length === 0 || start === -1 || !OUTPUT_NOTICE.test(out.slice(start + 2))) return out;
+  if (start === -1 || !OUTPUT_NOTICE.test(out.slice(start + 2))) return out;
   let notice = out.slice(start);
   for (const id of ids.notice) {
     const locator = new RegExp(`artifact://${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`, "g");
     notice = notice.replace(locator, "artifact://");
   }
+  // OMP 19 writes numbered spills in recovery clauses, not in the rest of the notice (e.g. a report label).
+  const truncationSpill = numberedSpill(meta?.truncation?.artifactId);
+  const cut = meta?.limits?.columnTruncated;
+  const cutSpill = numberedSpill(cut?.artifactId);
+  const selector = cut?.selectorBase === undefined ? cutSpill : spillSelectorBase(cut.selectorBase);
+  notice = notice.replace(
+    /(?<=\. Read )local:\/\/\d+\.log(?= for (?:full (?:output|report)|a head\/tail sample of the output)\b)/g,
+    (url) => (url === truncationSpill || url === cutSpill ? LOCAL_SPILL : url),
+  );
+  notice = notice.replace(/(?<=\. Use )local:\/\/\d+\.log(?=:raw:\d+-\d+ to read line )/g, (url) =>
+    url === selector ? LOCAL_SPILL : url,
+  );
   return out.slice(0, start) + notice;
 };
 
@@ -114,7 +139,11 @@ const metaWithoutLocators = (meta: OutputMeta): OutputMeta => {
   delete copy.minimized?.artifactId;
   const cut = copy.limits?.columnTruncated;
   delete cut?.artifactId;
-  if (typeof cut?.selectorBase === "string" && cut.selectorBase.startsWith("artifact://")) delete cut.selectorBase;
+  if (
+    typeof cut?.selectorBase === "string" &&
+    (cut.selectorBase.startsWith("artifact://") || spillSelectorBase(cut.selectorBase))
+  )
+    delete cut.selectorBase;
   return copy;
 };
 
@@ -130,13 +159,12 @@ export const resultFingerprint = (
 ): string => {
   const rawMeta = details["meta"];
   const meta = typeof rawMeta === "object" && rawMeta !== null ? (rawMeta as OutputMeta) : undefined;
-  const ids = artifactIds(meta);
   const timed = name === "bash" && details["wallTimeNoticeEmitted"] === true;
   const read = content.map((block) => {
     if (block?.type === "image") return { type: "image", mimeType: block.mimeType, data: block.data };
     if (block?.type !== "text" || typeof block.text !== "string") return block;
     const text = timed ? withoutWallTime(block.text, details["wallTimeMs"]) : block.text;
-    return { type: "text", text: withoutLocators(text, ids, name, details) };
+    return { type: "text", text: withoutLocators(text, meta, name, details) };
   });
   const kept = Object.fromEntries(
     Object.entries(details)

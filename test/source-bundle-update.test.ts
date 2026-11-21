@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readSourceBundle } from "../src/release/source-bundle.ts";
-import { prepareUlwUpdate, ULW_UPDATE_FILES } from "../src/release/source-bundle-update.ts";
+import { generateSourceBundle, prepareUlwUpdate, ULW_UPDATE_FILES } from "../src/release/source-bundle-update.ts";
 import { checkoutSourceBundle } from "../src/release/source-checkout.ts";
 import { digest } from "../src/update/source.ts";
 import { fixtureGit, overlayFixture } from "./source-bundle-setup.ts";
@@ -122,4 +122,23 @@ test("rewritten or unreachable upstream is held rather than treated as an automa
   expect(existsSync(f.output)).toBe(false);
   await expect(prepareUlwUpdate(f.source, f.output, join(f.root, "missing"))).rejects.toThrow();
   expect(ULW_UPDATE_FILES.map((file) => readFileSync(join(f.source, file)))).toEqual(f.original);
+});
+
+posix("shared metadata capture binds full blob identities and the reviewed staged tree", async () => {
+  const f = fixture();
+  const path = join(f.root, "captured.patch");
+  const lock = await generateSourceBundle(f.remote, path, f.old.lock.repository, f.root);
+  expect(lock.commit).toBe(f.old.commit);
+  expect(lock.resultTree).toBe(fixtureGit(f.remote, "write-tree"));
+  expect(lock.patchSha256).toBe(digest(readFileSync(path)));
+  expect(lock.files).toEqual(f.old.lock.files);
+  expect(readFileSync(path, "utf8")).toMatch(/^index [a-f0-9]{40}\.\.[a-f0-9]{40}/m);
+});
+
+posix("shared metadata capture holds empty overlays instead of inventing a no-overlay identity", async () => {
+  const f = fixture();
+  fixtureGit(f.remote, "reset", "--hard", f.old.commit);
+  await expect(
+    generateSourceBundle(f.remote, join(f.root, "empty.patch"), f.old.lock.repository, f.root),
+  ).rejects.toThrow("reviewed no-overlay migration");
 });

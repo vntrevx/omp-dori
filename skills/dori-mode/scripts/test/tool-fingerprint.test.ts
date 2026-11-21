@@ -93,4 +93,73 @@ describe("native artifact locators", () => {
       print(`tail\n\n[user data artifact://]`, truncated("3")),
     );
   });
+
+  describe("OMP 19 numbered spills", () => {
+    const raw = (file: string) => `[raw output: local://${file}.log]`;
+    const spillNotice = (file: string) => `[Showing lines 41-50 of 50. Read local://${file}.log for full output]`;
+    const cutNotice = (file: string, line = 1) =>
+      `[Some lines truncated to 512 chars. Use local://${file}.log:raw:${line}-${line} to read line ${line} whole]`;
+    const cut = (selector: { artifactId: string } | { selectorBase: string }) => ({
+      meta: { limits: { columnTruncated: { maxColumn: 512, lines: { first: 1, last: 1 }, ...selector } } },
+    });
+    const selector = (file: string) => cut({ selectorBase: `local://${file}.log` });
+
+    test("a minimized footer is the same evidence across spill numbers, including before Bash notices", () => {
+      expect(print(`ok\n${raw("4")}`, minimized("4"))).toBe(print(`ok\n${raw("8")}`, minimized("8")));
+      expect(print(`ok\n${raw("4")}\n\nWall time: 1.50 seconds\n${busy}`, { ...minimized("4"), ...timed })).toBe(
+        print(`ok\n${raw("8")}\n\n${busy}`, minimized("8")),
+      );
+    });
+
+    test("a truncation notice ignores the spill number but not truncation data or the locator scheme", () => {
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).toBe(
+        print(`tail\n\n${spillNotice("9")}`, truncated("9")),
+      );
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${spillNotice("9")}`, truncated("9", 51)),
+      );
+      expect(print(`tail\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${notice("3")}`, truncated("3")),
+      );
+    });
+
+    test("cut-line selectors ignore the spill number but keep the line selector", () => {
+      expect(print(`wide\n\n${cutNotice("3")}`, selector("3"), "read")).toBe(
+        print(`wide\n\n${cutNotice("7")}`, selector("7"), "read"),
+      );
+      expect(print(`wide\n\n${cutNotice("3")}`, cut({ artifactId: "3" }))).toBe(
+        print(`wide\n\n${cutNotice("7")}`, cut({ artifactId: "7" })),
+      );
+      expect(print(`wide\n\n${cutNotice("3")}`, selector("3"), "read")).not.toBe(
+        print(`wide\n\n${cutNotice("7", 2)}`, selector("7"), "read"),
+      );
+    });
+
+    test("literal output and text not backed by matching metadata remain evidence", () => {
+      expect(print(`see local://3.log\n\n${spillNotice("3")}`, truncated("3"))).not.toBe(
+        print(`see local://9.log\n\n${spillNotice("9")}`, truncated("9")),
+      );
+      expect(print(`head\n${raw("4")}\nbody\n${raw("4")}`, minimized("4"))).not.toBe(
+        print(`head\n${raw("8")}\nbody\n${raw("8")}`, minimized("8")),
+      );
+      expect(print(`ok\n${raw("4")}`, minimized("8"))).not.toBe(print(`ok\n${raw("5")}`, minimized("8")));
+      expect(print(`ok\n${raw("4")}`, {})).not.toBe(print(`ok\n${raw("5")}`, {}));
+      expect(print(`tail\n\n${spillNotice("31")}`, truncated("3"))).not.toBe(
+        print(`tail\n\n${spillNotice("32")}`, truncated("3")),
+      );
+      expect(print("tail\n\n[Showing local://3.log in user data]", truncated("3"))).not.toBe(
+        print("tail\n\n[Showing local://9.log in user data]", truncated("9")),
+      );
+    });
+
+    test("named local files remain evidence even where native spills are written", () => {
+      expect(print("wide", selector("build"), "read")).not.toBe(print("wide", selector("deploy"), "read"));
+      expect(print(`wide\n\n${cutNotice("build")}`, selector("build"), "read")).not.toBe(
+        print(`wide\n\n${cutNotice("deploy")}`, selector("deploy"), "read"),
+      );
+      expect(print(`ok\n${raw("build")}`, minimized("build"))).not.toBe(
+        print(`ok\n${raw("deploy")}`, minimized("deploy")),
+      );
+    });
+  });
 });

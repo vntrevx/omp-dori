@@ -148,11 +148,14 @@ export function validateReleaseManifest(value: unknown): ReleaseManifest {
     ["platform", "arch", "bun", "omp", "runtime", "messenger"],
     "requirements",
   );
+  const omp = requirements["omp"];
+  if (omp !== "18.18.8" && omp !== "18.20.0" && !matches(omp, /^19\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/))
+    throw new Error("Release requirements do not match the supported runtime");
   const supported = {
     platform: "linux",
     arch: "x64",
     bun: "1.4.4",
-    omp: requirements["omp"] === "18.18.8" ? "18.18.8" : "18.20.0",
+    omp,
     runtime: "herdr",
     messenger: "discord",
   } as const;
@@ -171,7 +174,7 @@ export function validateReleaseManifest(value: unknown): ReleaseManifest {
     )
   )
     throw new Error("New source-bundle payloads cannot use the older no-lock release protocol");
-  if (supported.omp === "18.20.0") {
+  if (supported.omp !== "18.18.8") {
     for (const path of [
       "omp-ulw.lock",
       "omp-ulw.overlay.lock",

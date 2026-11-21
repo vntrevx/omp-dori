@@ -2,11 +2,11 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { ConfigError } from "../../skills/dori-mode/scripts/src/config.ts";
 import { platform } from "../platform/index.ts";
 import { captureSetupFile } from "../setup-files.ts";
 import { acquireBundle } from "./bundle.ts";
 import { runAutomaticCommand } from "./automatic-cli.ts";
+import { type ReleaseAttempt, referenceRefresh, releaseFailure } from "./completion.ts";
 import { acquireConsumerLock, consumerPaths, initialize, pointer, realDirectory } from "./files.ts";
 import { installBundle, preflightInstallation, rollbackRelease } from "./install.ts";
 import { runCacheCommand } from "./native-cache-cli.ts";
@@ -42,6 +42,7 @@ const identity = (manifest: ReleaseManifest) => ({
 export async function runConsumerUpdate(argv: string[]): Promise<number> {
   if (argv[0] === "auto") return runAutomaticCommand(argv.slice(1));
   let releaseLock: (() => void) | undefined;
+  let attempt: ReleaseAttempt | undefined;
   try {
     const args = parseArgs({
       args: argv,
@@ -185,21 +186,25 @@ export async function runConsumerUpdate(argv: string[]): Promise<number> {
     }
     initialize(paths);
     releaseLock = acquireConsumerLock(paths);
+    if (lstatSync(paths.journal, { throwIfNoEntry: false }))
+      attempt = { paths, before: loadInstalled(paths), source: pointer(paths.live), command: "recovery" };
     const before = recoverInstalled(paths);
     if (command === "status") {
       if (before) verifyRelease(paths, before.current);
       if (before?.previous) verifyRelease(paths, before.previous);
+      const references = referenceRefresh(paths, before);
       console.log(
         JSON.stringify(
           {
             installed: before ? identity(before.current) : null,
             previous: before?.previous ? identity(before.previous) : null,
+            references,
           },
           null,
           2,
         ),
       );
-      return 0;
+      return references ? 3 : 0;
     }
     preflightInstallation(paths);
     if (!bundle && before?.previous) {
@@ -213,6 +218,7 @@ export async function runConsumerUpdate(argv: string[]): Promise<number> {
     }
     if ((bundle?.manifest ?? before?.previous)?.requirements.omp === "18.18.8")
       prerequisites(runtime!, true, true, paths);
+    attempt = { paths, before, source: pointer(paths.live), command: command! };
     const after = bundle
       ? await installBundle(paths, bundle, before, { config: config! })
       : await rollbackRelease(paths, before, args.values.version, config);
@@ -232,14 +238,7 @@ export async function runConsumerUpdate(argv: string[]): Promise<number> {
     );
     return 0;
   } catch (error) {
-    const reason =
-      error instanceof SyntaxError || error instanceof ConfigError
-        ? "Invalid configuration or release metadata; inspect the selected files"
-        : error instanceof Error
-          ? error.message
-          : String(error);
-    console.error(`OMP-Dori release held: ${reason}`);
-    return 2;
+    return releaseFailure(error, attempt);
   } finally {
     releaseLock?.();
   }

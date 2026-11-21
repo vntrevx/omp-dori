@@ -41,11 +41,11 @@ export async function nativeMessageHead(root: string, manager: SessionManager, a
   const { session } = await createAgentSession({
     cwd: root, agentDir: join(root, "agent"), sessionManager: manager, settings,
     model: { ...SOL_MODEL, id: "recorded-response", name: "Recorded response", provider: "fixture", reasoning: false },
-    getApiKey: async () => "synthetic-fixture-key", disableModelFallback: true, cacheWarming: false,
+    getApiKey: async () => "synthetic-fixture-key", disableModelFallback: true, cacheWarming: "off",
     systemPrompt: "Respond using the recorded fixture stream.", toolNames: [], preloadedCustomToolPaths: [],
     skills: [], rules: [], contextFiles: [], noContextFiles: true, promptTemplates: [], slashCommands: [],
     enableMCP: false, enableLsp: false, enableIrc: false, skipPythonPreflight: true,
-    suppressAutoPrewalk: true, autoTitle: false, deferSkillDescriptionCompression: true,
+    suppressAutoPrewalk: true, autoTitle: false, deferHintCompression: true,
     disableExtensionDiscovery: true, additionalExtensionPaths: [],
     extensions: [(extension) => {
       api = extension;

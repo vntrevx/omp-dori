@@ -64,6 +64,10 @@
 
 - Unreleased (source only): Telegram inbound now verifies bot identity and an empty webhook before readiness or polling; startup rejection and interruption leave the cursor and existing webhook untouched.
 
+- Bind native OMP 19.0.1 and its version-matched official addon, port the remaining overlay, and retain authenticated 18.20.0 consumer rollback. See the [per-hunk port audit](docs/native-omp-19.md).
+
+- Prepare stable OMP 19.x updates as reviewed draft candidates, with exact conflict artifacts and holds for unsupported native majors. The [native update workflow](docs/native-omp-updates.md) does not merge, publish releases, or modify installed homes.
+
 - Exercise native prompt rendering across role, ULW, workflow, profile, child-tool, and compaction boundaries in an isolated offline composition matrix.
 
 - Lane final reports separate the outcome, changes or findings, verified evidence, unrun checks and handoff. Done claims cite the saved report and live Done receipts without treating partial or blocked work as done.

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import nativeFixture from "../../test/fixtures/omp-native-host/package.json";
 
 // The authenticated ULW source verifier is provisioned with POSIX PATH syntax;
 // the Windows workflow provisions only the native host fixtures.
@@ -37,7 +38,11 @@ matrixTest(
         child.exited,
       ]);
       expect({ code, err }).toEqual({ code: 0, err: "" });
-      expect(JSON.parse(out)).toEqual({ nativeVersion: expect.stringMatching(/^18\./), cases: 30, networkAttempts: 0 });
+      expect(JSON.parse(out)).toEqual({
+        nativeVersion: nativeFixture.dependencies["@oh-my-pi/pi-coding-agent"],
+        cases: 30,
+        networkAttempts: 0,
+      });
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

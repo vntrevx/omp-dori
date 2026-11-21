@@ -3,7 +3,10 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { randomUUID } from "node:crypto";
 
 if (process.argv.includes("--version")) {
-  console.log(process.env["CATALY_TEST_OMP_VERSION"] ?? "18.20.0");
+  console.log(
+    process.env["CATALY_TEST_OMP_VERSION"] ??
+      JSON.parse(readFileSync(new URL("../../native-omp.lock", import.meta.url), "utf8")).nativeVersion,
+  );
   process.exit(0);
 }
 if (!process.argv.includes("rpc-ui") || !process.argv.includes("always-ask") || process.env["HERDR_PANE_ID"])

@@ -13,6 +13,7 @@ import { freezeSource } from "../update/source.ts";
 import { extractArchive } from "./archive.ts";
 import { setAutomaticEnabled } from "./automatic-state.ts";
 import type { VerifiedBundle } from "./bundle.ts";
+import { clearReferenceRefresh, markReferenceRefresh } from "./completion.ts";
 import {
   type ConsumerPaths,
   owned,
@@ -24,6 +25,7 @@ import {
   saveJson,
 } from "./files.ts";
 import { assertNoLiveDori } from "./live.ts";
+import { controllerReads } from "./controller.ts";
 import { assertNoConsumerLaunches, waitLaunchGate } from "./launch-leases.ts";
 import { validateReleaseManifest } from "./manifest.ts";
 import { provisionNativeSource } from "./native.ts";
@@ -73,17 +75,19 @@ async function installReferences(
   manifest: InstalledState["current"],
   config: SetupSnapshot,
   launchOwner?: number,
-): Promise<SetupSnapshot> {
+  deferred = false,
+): Promise<readonly [SetupSnapshot, () => Promise<void>]> {
   // Preflight the entire set before the first link/config creation. Existing custom files stay untouched.
   preflightInstallation(paths);
-  if (manifest.requirements.omp === "18.20.0") await provisionNativeSource(source, paths.home);
+  if (manifest.requirements.omp !== "18.18.8") await provisionNativeSource(source, paths.home);
   const gate = await waitLaunchGate(paths);
   try {
     assertNoConsumerLaunches(paths, launchOwner);
     preflightInstallation(paths);
-    const plan = consumerConfigPlan(paths, config, source, dependency, manifest.requirements.omp === "18.20.0");
+    const plan = consumerConfigPlan(paths, config, source, dependency, manifest.requirements.omp !== "18.18.8");
     console.error(`SETUP_PREVIEW ${JSON.stringify(setupPreview(config, plan.text, plan.keys))}`);
     const published = publishSetupFile(config, plan.text);
+    let render = async () => {};
     if (paths.dori !== join(paths.home, ".dori")) {
       // Wrappers are release behavior too. Using this updater's renderer would retain newer bytes on rollback.
       const renderer = "src/release/references.ts";
@@ -94,8 +98,15 @@ async function installReferences(
       const target = await import(pathToFileURL(join(source, renderer)).href);
       if (typeof target.installIsolatedReferences !== "function")
         throw new Error("Selected consumer reference renderer has no installer");
-      await target.installIsolatedReferences(paths, source);
-      preflightReferences(paths);
+      const install = async () => {
+        await target.installIsolatedReferences(paths, source);
+        preflightReferences(paths);
+        clearReferenceRefresh(paths);
+      };
+      // An older release's dispatcher rejects the newer release, which stays selected through a held or interrupted
+      // activation. Render it only after activation; the newer dispatcher launches either release meanwhile.
+      if (deferred) render = install;
+      else await install();
     }
     for (const [path, target] of paths.links) {
       realDirectory(dirname(path), true);
@@ -107,7 +118,7 @@ async function installReferences(
       home: paths.home,
     });
     console.error(`SETUP_READBACK ${JSON.stringify(readback)}`);
-    return published;
+    return [published, render];
   } finally {
     gate();
   }
@@ -128,6 +139,10 @@ export async function installBundle(
   preflightInstallation(paths);
   assertInstalledPointer(paths, before);
   const manifest = validateReleaseManifest(bundle.manifest);
+  if (before && !controllerReads(manifest, before.current))
+    throw new Error(
+      `Release ${manifest.tag} cannot read the OMP 19 receipt of installed ${before.current.tag}; use "dori update rollback" to restore a retained pre-19 release`,
+    );
   const receipts = readdirSync(paths.manifests)
     .filter((name) => name.endsWith(".json"))
     .map((name) => validateReleaseManifest(readJson(join(paths.manifests, name))));
@@ -144,7 +159,7 @@ export async function installBundle(
       throw new Error("Installed release identity collision");
     const source = verifyRelease(paths, manifest);
     const dependency = await provisionDependency(paths, manifest, source);
-    const published = await installReferences(paths, source, dependency, manifest, config, options.launchOwner);
+    const [published] = await installReferences(paths, source, dependency, manifest, config, options.launchOwner);
     assertSetupFile(published);
     assertInstalledPointer(paths, before);
     return before;
@@ -168,7 +183,7 @@ export async function installBundle(
       freezeDirectories(destination);
     }
     const source = verifyRelease(paths, manifest);
-    const published = await installReferences(paths, source, dependency, manifest, config, options.launchOwner);
+    const [published] = await installReferences(paths, source, dependency, manifest, config, options.launchOwner);
     const after: InstalledState = { version: 1, current: manifest, ...(before ? { previous: before.current } : {}) };
     options.beforeActivate?.();
     activateRelease(paths, before, after, options.launchOwner, { snapshot: published });
@@ -193,12 +208,27 @@ export async function rollbackRelease(
   assertInstalledPointer(paths, before);
   const source = verifyRelease(paths, before.previous);
   const dependency = await provisionDependency(paths, before.previous, source);
-  const published = await installReferences(paths, source, dependency, before.previous, config);
-  const after: InstalledState = { version: 1, current: before.previous, previous: before.current };
+  const reads = controllerReads(before.previous, before.current);
+  const [published, render] = await installReferences(
+    paths,
+    source,
+    dependency,
+    before.previous,
+    config,
+    undefined,
+    !reads,
+  );
+  const after: InstalledState = {
+    version: 1,
+    current: before.previous,
+    ...(reads ? { previous: before.current } : {}),
+  };
+  if (!reads && paths.dori !== join(paths.home, ".dori")) markReferenceRefresh(paths, after);
   activateRelease(paths, before, after, undefined, {
     snapshot: published,
     // A requested rollback remains selected until the owner explicitly resumes automatic updates.
     beforeJournal: () => setAutomaticEnabled(paths, false, true),
   });
+  await render();
   return after;
 }

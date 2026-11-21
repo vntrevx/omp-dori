@@ -17,6 +17,44 @@ export type UlwCandidate = {
   readonly identity: string;
 };
 
+/** Capture the reviewed index as a full-identity patch and exact-byte postimage lock. */
+export async function generateSourceBundle(
+  checkout: string,
+  patchPath: string,
+  repository: string,
+  home: string,
+): Promise<SourceBundle> {
+  const git = (argv: readonly string[]) => bundleGit(argv, checkout, home);
+  const commit = await git(["rev-parse", "--verify", "HEAD^{commit}"]);
+  await git(["diff", "--cached", "--binary", "--full-index", `--output=${patchPath}`, "HEAD", "--"]);
+  const patch = readFileSync(patchPath);
+  if (!patch.length) throw new Error("Source overlay is now empty; a reviewed no-overlay migration is required");
+  const raw = await git(["diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "-z", "HEAD", "--"]);
+  const entries = raw.split("\0");
+  if (entries.pop() !== "" || entries.length % 2) throw new Error("Invalid source postimage listing");
+  const files: SourceEntry[] = [];
+  for (let i = 0; i < entries.length; i += 2) {
+    const entry = /^:(\d{6}) (\d{6}) [a-f0-9]{40} [a-f0-9]{40} [AMDT]$/.exec(entries[i]!);
+    const path = entries[i + 1]!;
+    if (!entry) throw new Error("Invalid source overlay change");
+    if (entry[2] === "000000") continue;
+    if (!/^(100644|100755)$/.test(entry[2]!)) throw new Error("Source overlay changes a non-regular file");
+    const actual = join(checkout, path);
+    const stat = lstatSync(actual);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Source overlay postimage is not a regular file");
+    files.push({ path, sha256: digest(readFileSync(actual)), executable: entry[2] === "100755" });
+  }
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return {
+    version: 1,
+    repository,
+    commit,
+    patchSha256: digest(patch),
+    resultTree: await git(["write-tree"]),
+    files,
+  };
+}
+
 /** Metadata only: preparing a candidate never executes upstream code or writes the source/installed caches. */
 export async function prepareUlwUpdate(
   source: string,
@@ -71,33 +109,8 @@ export async function prepareUlwUpdate(
       );
     }
     const patchPath = join(temporary, "omp-ulw.patch");
-    await git(["diff", "--cached", "--binary", "--full-index", `--output=${patchPath}`, "HEAD", "--"], checkout);
+    const lock = await generateSourceBundle(checkout, patchPath, before.lock.repository, temporary);
     const patch = readFileSync(patchPath);
-    if (!patch.length) throw new Error("ULW overlay is now empty; a reviewed no-overlay migration is required");
-    const raw = await git(["diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "-z", "HEAD", "--"], checkout);
-    const entries = raw.split("\0");
-    if (entries.pop() !== "" || entries.length % 2) throw new Error("Invalid ULW postimage listing");
-    const files: SourceEntry[] = [];
-    for (let i = 0; i < entries.length; i += 2) {
-      const entry = /^:(\d{6}) (\d{6}) [a-f0-9]{40} [a-f0-9]{40} [AMDT]$/.exec(entries[i]!);
-      const path = entries[i + 1]!;
-      if (!entry) throw new Error("Invalid ULW overlay change");
-      if (entry[2] === "000000") continue;
-      if (!/^(100644|100755)$/.test(entry[2]!)) throw new Error("ULW overlay changes a non-regular file");
-      const actual = join(checkout, path);
-      const stat = lstatSync(actual);
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("ULW overlay postimage is not a regular file");
-      files.push({ path, sha256: digest(readFileSync(actual)), executable: entry[2] === "100755" });
-    }
-    files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    const lock: SourceBundle = {
-      version: 1,
-      repository: before.lock.repository,
-      commit,
-      patchSha256: digest(patch),
-      resultTree: await git(["write-tree"], checkout),
-      files,
-    };
     const staged = join(temporary, "bundle");
     mkdirSync(staged, { mode: 0o700 });
     writeFileSync(join(staged, "omp-ulw.lock"), `${commit}\n`, { mode: 0o600 });

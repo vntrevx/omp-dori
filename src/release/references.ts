@@ -137,7 +137,7 @@ export function installIsolatedReferences(paths: ConsumerPaths, source: string):
   if (!omp && !regularFile(join(source, "native-omp.lock")))
     throw new Error("The native omp command is unavailable outside Dori wrappers");
   const protocol =
-    'const {readFileSync}=require("node:fs"); const {requirements,source}=JSON.parse(readFileSync(process.argv[1],"utf8")); const bound=source.files.some(({path})=>["native-omp.lock","native-omp.patch","omp-ulw.overlay.lock","omp-ulw.patch"].includes(path)); if(requirements.omp!==(bound?"18.20.0":"18.18.8")) throw new Error("Unsupported or inconsistent consumer native protocol"); console.log(requirements.omp);';
+    'const {readFileSync}=require("node:fs"); const {requirements,source}=JSON.parse(readFileSync(process.argv[1],"utf8")); const bound=source.files.some(({path})=>["native-omp.lock","native-omp.patch","omp-ulw.overlay.lock","omp-ulw.patch"].includes(path)); if(bound?requirements.omp!=="18.20.0"&&!/^19\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/.test(requirements.omp):requirements.omp!=="18.18.8") throw new Error("Unsupported or inconsistent consumer native protocol"); console.log(requirements.omp);';
   const legacy = omp
     ? `omp=${quote(omp)}`
     : 'echo "An independent native OMP is required for this retained release; reinstall with its toolchain" >&2; exit 1';
@@ -164,7 +164,7 @@ export function installIsolatedReferences(paths: ConsumerPaths, source: string):
     `exec ${quote(process.execPath)} ${quote(join(paths.live, "src/cli.ts"))} "$@"`,
   );
   references["bin/omp"] = wrapper(
-    `source=$(cd ${quote(paths.live)} && pwd -P) || exit\nif [ -f "$source/src/release/automatic.ts" ]; then\n  source=$(guard=$(/usr/bin/mktemp -d) || exit; trap '/bin/rmdir "$guard"' EXIT; cd "$guard" || exit; ${quote(process.execPath)} "$source/src/release/automatic.ts" "$source" "$HOME" "$$" "$@") || exit\nfi\nprotocol=$(guard=$(/usr/bin/mktemp -d) || exit; trap '/bin/rmdir "$guard"' EXIT; cd "$guard" || exit; ${quote(process.execPath)} -e ${quote(protocol)} ${quote(paths.manifests)}/"\${source##*/}".json) || exit\ncase "$protocol" in\n  18.20.0) omp="$source/scripts/consumer/omp" ;;\n  18.18.8) ${legacy} ;;\nesac\nexec "$omp" --no-extensions -e "$source/extension" --config ${quote(join(paths.dori, "omp.yml"))} --config ${quote(join(paths.root, "consumer-discovery"))}/"\${source##*/}"/omp.yml "$@"`,
+    `source=$(cd ${quote(paths.live)} && pwd -P) || exit\nif [ -f "$source/src/release/automatic.ts" ]; then\n  source=$(guard=$(/usr/bin/mktemp -d) || exit; trap '/bin/rmdir "$guard"' EXIT; cd "$guard" || exit; ${quote(process.execPath)} "$source/src/release/automatic.ts" "$source" "$HOME" "$$" "$@") || exit\nfi\nprotocol=$(guard=$(/usr/bin/mktemp -d) || exit; trap '/bin/rmdir "$guard"' EXIT; cd "$guard" || exit; ${quote(process.execPath)} -e ${quote(protocol)} ${quote(paths.manifests)}/"\${source##*/}".json) || exit\ncase "$protocol" in\n  18.20.0|19.*) omp="$source/scripts/consumer/omp" ;;\n  18.18.8) ${legacy} ;;\nesac\nexec "$omp" --no-extensions -e "$source/extension" --config ${quote(join(paths.dori, "omp.yml"))} --config ${quote(join(paths.root, "consumer-discovery"))}/"\${source##*/}"/omp.yml "$@"`,
   );
   references["bin/omp-dori"] = wrapper(
     `case "\${1:-}" in\n  omp) shift; exec ${quote(join(paths.dori, "bin/omp"))} "$@" ;;\n  hc) shift; exec hc "$@" ;;\n  *) exec ${quote(join(paths.dori, "bin/dori"))} "$@" ;;\nesac`,

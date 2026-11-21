@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import ts from "typescript";
 import { checkTestFixtures } from "../scripts/check-test-fixtures.ts";
+import nativeFixture from "./fixtures/omp-native-host/package.json";
 
 const source = resolve(import.meta.dir, "..");
 const nativeHost = join(source, "test/fixtures/omp-native-host/node_modules/@oh-my-pi/pi-coding-agent");
@@ -82,14 +83,19 @@ test("a wrong native version cannot pass the prerequisite check", async () => {
   const host = join(f.root, "native");
   mkdirSync(host);
   writeFileSync(join(host, "package.json"), '{"version":"0.0.0"}\n');
-  await expect(checkTestFixtures(f.root, { ...f.env, DORI_TEST_OMP_ROOT: host })).rejects.toThrow("must be 18.20.0");
+  await expect(checkTestFixtures(f.root, { ...f.env, DORI_TEST_OMP_ROOT: host })).rejects.toThrow(
+    `must be ${nativeFixture.dependencies["@oh-my-pi/pi-coding-agent"]}`,
+  );
 });
 
 test("same-version metadata outside the imported native host is still refused", async () => {
   const f = fixture();
   const host = join(f.root, "foreign-native");
   mkdirSync(host);
-  writeFileSync(join(host, "package.json"), '{"version":"18.20.0"}\n');
+  writeFileSync(
+    join(host, "package.json"),
+    JSON.stringify({ version: nativeFixture.dependencies["@oh-my-pi/pi-coding-agent"] }),
+  );
   for (const path of [
     "src/extensibility/extensions/runner.ts",
     "src/extensibility/extensions/loader.ts",

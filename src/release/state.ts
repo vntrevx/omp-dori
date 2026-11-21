@@ -1,7 +1,8 @@
 import { lstatSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { assertSetupFile, type SetupSnapshot } from "../setup-files.ts";
 import { assertSourceAdmission, sameManifest, sourceManifest } from "../update/source.ts";
+import { controllerReads } from "./controller.ts";
 import {
   type ConsumerPaths,
   owned,
@@ -35,7 +36,7 @@ export const releasePath = (paths: ConsumerPaths, manifest: ReleaseManifest): st
 export const manifestPath = (paths: ConsumerPaths, manifest: ReleaseManifest): string =>
   join(paths.manifests, `${releaseId(manifest)}.json`);
 const nativeTarget = (paths: ConsumerPaths, state: InstalledState | undefined): string | undefined =>
-  paths.dori === join(paths.home, ".dori") && state?.current.requirements.omp === "18.20.0"
+  paths.dori === join(paths.home, ".dori") && state && state.current.requirements.omp !== "18.18.8"
     ? join(releasePath(paths, state.current), "scripts/consumer/omp")
     : undefined;
 
@@ -115,24 +116,34 @@ function recoverInstalledUnlocked(paths: ConsumerPaths): InstalledState | undefi
   const actual = pointer(paths.live);
   const before = journal.before ? releasePath(paths, journal.before.current) : undefined;
   const after = releasePath(paths, journal.after.current);
+  const conflict = new Error("Source pointer conflicts with interrupted activation; preserve it for inspection");
+  // Only a committed cross-generation activation publishes state while a retained release is still selected and
+  // its receipt is absent from the journal. Identify that release from its own receipt and finish the activation.
+  const forward = !journal.before && state !== undefined && actual !== undefined && actual !== after;
+  let outgoing = journal.before;
+  if (forward) {
+    const receipt = join(paths.manifests, `${basename(actual)}.json`);
+    const manifest = regularFile(receipt) ? validateReleaseManifest(readJson(receipt)) : undefined;
+    if (!manifest || releasePath(paths, manifest) !== actual) throw conflict;
+    outgoing = { version: 1, current: manifest };
+  }
   const omp = paths.dori === join(paths.home, ".dori") ? join(paths.dori, "bin/omp") : undefined;
   const native = omp ? pointer(omp) : undefined;
   if (!omp) preflightReferences(paths);
-  if (native !== nativeTarget(paths, journal.before) && native !== nativeTarget(paths, journal.after))
+  if (native !== nativeTarget(paths, outgoing) && native !== nativeTarget(paths, journal.after))
     throw new Error("Native OMP pointer conflicts with interrupted activation; preserve it for inspection");
   let recovered: InstalledState | undefined;
-  if (actual === after) {
+  if (actual === after || forward) {
     verifyRelease(paths, journal.after.current);
     recovered = journal.after;
   } else if (actual === before) {
     if (journal.before) verifyRelease(paths, journal.before.current);
     recovered = journal.before;
-  } else throw new Error("Source pointer conflicts with interrupted activation; preserve it for inspection");
+  } else throw conflict;
   const expectedNative = nativeTarget(paths, recovered);
-  if (omp && native !== expectedNative) {
-    assertNoLiveDori(paths);
-    replacePointer(omp, native, expectedNative);
-  }
+  if ((omp && native !== expectedNative) || forward) assertNoLiveDori(paths);
+  if (omp && native !== expectedNative) replacePointer(omp, native, expectedNative);
+  if (forward) replacePointer(paths.live, actual, after);
   if (recovered) saveJson(paths.state, recovered);
   else removeState(paths);
   unlinkSync(paths.journal);
@@ -173,7 +184,14 @@ function activateReleaseUnlocked(
   const omp = paths.dori === join(paths.home, ".dori") ? join(paths.dori, "bin/omp") : undefined;
   const nativeBefore = nativeTarget(paths, before);
   const nativeAfter = nativeTarget(paths, after);
+  // An older controller selected by either pointer rejects every journal that still carries the outgoing OMP 19
+  // receipt. Publish its state and drop that receipt first; recovery then completes the activation forward.
+  const commit = before !== undefined && !controllerReads(after.current, before.current);
   try {
+    if (commit) {
+      saveJson(paths.state, after);
+      saveJson(paths.journal, { version: 1, after });
+    }
     if (omp && nativeBefore !== nativeAfter) replacePointer(omp, nativeBefore, nativeAfter);
     replacePointer(paths.live, old, target);
     saveJson(paths.state, after);
@@ -187,6 +205,7 @@ function activateReleaseUnlocked(
       throw new Error("Native OMP pointer conflicts with interrupted activation; preserve it for inspection");
     if (source === target) replacePointer(paths.live, target, old);
     if (omp && native !== nativeBefore) replacePointer(omp, native, nativeBefore);
+    if (commit) saveJson(paths.journal, journal);
     if (before) saveJson(paths.state, before);
     else removeState(paths);
     throw error;

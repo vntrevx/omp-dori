@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { laneStartCommand } from "../skills/dori-mode/scripts/src/launch-session.ts";
 import { quoteForPane } from "../skills/dori-mode/scripts/src/launch-footer.ts";
+import fixture from "./fixtures/omp-native-host/package.json";
 
 // POSIX-only: launch uses the user's shell's process-scoped assignment syntax.
 test.skipIf(process.platform === "win32")(
@@ -54,7 +55,7 @@ test.skipIf(process.platform === "win32")(
           runId,
           requestId: "discord:111111111111111111:222222222222222222",
           networkAttempts: 0,
-          nativeVersion: "18.20.0",
+          nativeVersion: fixture.dependencies["@oh-my-pi/pi-coding-agent"],
         },
         { restartRun: "" },
       ]);

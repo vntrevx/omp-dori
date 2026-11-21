@@ -1,0 +1,77 @@
+name: Native OMP update candidate
+
+on:
+  schedule:
+    # 12:30 Asia/Seoul; GitHub may delay scheduled runs.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-update-candidate
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'vntrevx/Cataly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      changed: ${{ steps.prepare.outputs.changed }}
+      source: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Record trusted source identity
+        id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Prepare stable native tag without executing upstream code or lifecycle scripts
+        id: prepare
+        run: |
+          bun scripts/update-native-omp.ts --out "$RUNNER_TEMP/native-candidate"
+          if [ -f "$RUNNER_TEMP/native-candidate/candidate.json" ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.prepare.outputs.changed == 'true'
+        with:
+          name: native-candidate
+          path: ${{ runner.temp }}/native-candidate
+          if-no-files-found: error
+          retention-days: 30
+
+  propose:
+    needs: prepare
+    if: github.repository == 'vntrevx/Cataly' && needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.source }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-candidate
+          path: ${{ runner.temp }}/native-candidate
+      - name: Publish validated draft or reviewed-port issue from trusted code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/update-native-omp-publish.ts --from "$RUNNER_TEMP/native-candidate"

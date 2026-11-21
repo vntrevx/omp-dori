@@ -17,7 +17,7 @@ import { assertNoConsumerLaunches, registerConsumerLaunch, waitLaunchGate } from
 import { supportsReleaseProfile, validateReleaseManifest } from "./manifest.ts";
 import { prerequisites } from "./provision.ts";
 import { consumerReleaseHome } from "./runtime.ts";
-import { hasConsumerState, loadInstalled, recoverInstalled, releasePath, verifyRelease } from "./state.ts";
+import { hasConsumerState, loadInstalled, recoverInstalled, releaseId, releasePath, verifyRelease } from "./state.ts";
 
 const DAY = 24 * 60 * 60 * 1000;
 type AutomaticOptions = {
@@ -119,7 +119,7 @@ export async function automaticUpdate(paths: ConsumerPaths, options: AutomaticOp
       )
         throw new Error("Available release does not support this installation profile");
       // Do not remove the bound launcher by automatically selecting the legacy native protocol.
-      if (installed.current.requirements.omp === "18.20.0" && manifest.requirements.omp !== "18.20.0")
+      if (installed.current.requirements.omp !== "18.18.8" && manifest.requirements.omp === "18.18.8")
         throw new Error("Automatic updates cannot downgrade the bound native protocol");
       preflightAutomaticInstallation(paths);
       const after = await installBundle(paths, candidate, installed, {
@@ -135,7 +135,9 @@ export async function automaticUpdate(paths: ConsumerPaths, options: AutomaticOp
       if (!current) throw new Error("Consumer installation disappeared during automatic update");
       const runnable = await verifyAutomaticInstallation(paths, current);
       const detail = error instanceof Error ? error.message : String(error);
-      finish(error instanceof SetupConflict || /holds|held|Live/.test(detail) ? "held" : "failed", detail);
+      if (releaseId(current.current) !== releaseId(observed.current))
+        finish("installed", `Committed; maintenance pending: ${detail}`, current.current.tag);
+      else finish(error instanceof SetupConflict || /holds|held|Live/.test(detail) ? "held" : "failed", detail);
       return runnable;
     }
   } finally {

@@ -188,7 +188,7 @@ separators, temp directories or the `PATH` delimiter is fixed with
 
 ### Native and provider boundaries
 
-The root and extension suites require the genuine OMP 18.20.0 host fixture,
+The root and extension suites require the genuine OMP 19.0.1 host fixture,
 including its published declarations. A same-version foreign host, raw checkout
 without `dist/types`, or stock-version stamp is not a substitute. The guarded
 `with the real omp-ulw` tests must execute, not be skipped in the full gate.
@@ -223,7 +223,7 @@ evidence.
 
 Linux `check` also executes the bound ULW code-mode and task-host checks against
 the guarded bound native source. Keep the upstream assertions, including the
-documented 18.20.2 accounting behavior: a failure on the selected 18.20.0 host
+documented 18.20.2 accounting behavior: a failure on the selected 19.0.1 host
 holds the pin or release rather than relaxing the test.
 
 Required-source regressions exercise genuine SDK print/RPC initialization against

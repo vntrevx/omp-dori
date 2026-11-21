@@ -139,7 +139,7 @@ export class HeadlessRemoteCommands {
           throw new Error(
             delivery === "steer" ? "No foreground turn to steer" : "Native lane is busy; choose explicit steer",
           );
-        // 18.20.0 has no raw flag for steer/follow_up. It will expand a slash-leading template or reject an extension
+        // The pinned RPC has no raw flag for steer/follow_up. It will expand a slash-leading template or reject an extension
         // command, so refuse this form rather than changing the payload or invoking a command.
         if (text.trimStart().startsWith("/"))
           throw new Error("Native headless RPC cannot submit slash-leading text literally");

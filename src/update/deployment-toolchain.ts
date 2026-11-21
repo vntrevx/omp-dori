@@ -75,12 +75,10 @@ export async function inspectRuntimeToolchain(
     ((major ?? 0) < 18 || (major === 18 && (minor ?? 0) < 18) || (major === 18 && minor === 18 && (patch ?? 0) < 8))
   )
     throw new DeploymentHeld("private native OMP 18.18.8 or newer is required");
-  if (
-    !legacy &&
-    lstatSync(join(record.releasePath, "native-omp.lock"), { throwIfNoEntry: false }) &&
-    match[1] !== "18.20.0"
-  )
-    throw new DeploymentHeld("new source bundles require native OMP 18.20.0");
+  if (!legacy && lstatSync(join(record.releasePath, "native-omp.lock"), { throwIfNoEntry: false })) {
+    const required = readSourceBundle(record.releasePath, true).lock.nativeVersion;
+    if (match[1] !== required) throw new DeploymentHeld(`new source bundles require native OMP ${required}`);
+  }
   const ompEntry = realpathSync(omp);
   return {
     omp,
