@@ -158,7 +158,7 @@ The lane never gets the Slack token itself: on hc every env value is a command-l
 
 `--dry-run` prints the brief as the lane would get it, lessons and footer included, and changes nothing.
 
-Readable interactive native OMP templates start without their work brief. The controller requires an exact catalog `provider/model` from `--model` or `defaultModel`, confirms the selected model in the current live session, then delivers the brief once via verified delivery. Missing, stale or mismatched readback holds delivery without choosing a substitute. The template needs exactly one standalone `{prompt}` and must not preconfigure the internal `--dori-launch-model` flag.
+Readable interactive native OMP templates start without their work brief. The controller requires an exact catalog `provider/model` from `--model` or `defaultModel`, optionally followed by an OMP thinking level (`:off`, `:minimal`, `:low`, `:medium`, `:high`, `:xhigh` or `:max`), confirms the selected model and that level in the current live session, then delivers the brief once via verified delivery. Missing, stale or mismatched readback holds delivery without choosing a substitute. The template needs exactly one standalone `{prompt}` and must not preconfigure the internal `--dori-launch-model` flag.
 
 Opaque and non-interactive templates keep their existing startup unless `requireModelReadback` is enabled. Their unavailable readback is reported, not inferred from the command. Native readback labels requested and observed models separately. Its billing classification is descriptive metadata, not approval to spend or quota evidence. These checks do not change request attribution, tool approvals or live-session ownership requirements.
 

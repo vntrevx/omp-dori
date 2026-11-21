@@ -92,6 +92,35 @@ test("native case-insensitive exact readback is accepted without changing the re
   expect(modelLaunchProblem(["omp", "--model", "{model}", "{prompt}"], "ollama/qwen:14b")).toBeNull();
 });
 
+test("a thinking-suffixed launch delivers once its base model and native level both read back", async () => {
+  const high = {
+    ...matched,
+    requested: { provider: "subscription", id: "exact:high" },
+    thinking: { requested: "high", observed: "high" },
+  };
+  const { result, world } = await launch("subscription/exact:high", { modelReadback: high });
+  expect(result.startup).toBe("STARTUP_OK model-gate w:p9");
+  expect(sent(world)).toHaveLength(1);
+  expect(world.calls.find((argv) => argv[2] === "run")?.at(-1)).toContain(
+    "--dori-launch-model=subscription/exact:high",
+  );
+  for (const patch of [
+    { ...high, thinking: { requested: "high", observed: "low" } },
+    { ...matched, requested: high.requested },
+    {
+      ...high,
+      observed: { provider: "subscription", id: "exact:high" },
+      thinking: { requested: "low", observed: "low" },
+    },
+  ]) {
+    state.done();
+    state = withState();
+    const held = await launch("subscription/exact:high", { modelReadback: patch });
+    expect(held.result.startup).toStartWith("STARTUP_MODEL_HOLD");
+    expect(sent(held.world)).toEqual([]);
+  }
+});
+
 test("unsafe typed launch text is held without a send or an unhandled delivery error", async () => {
   const { result, world } = await launch("subscription/exact", { modelReadback: matched }, "ulw $(work)");
   expect(result.startup).toStartWith("STARTUP_MODEL_HOLD");

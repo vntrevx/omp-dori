@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `dori launch --model provider/id:<level>` accepts an OMP thinking-level suffix again: the native readback matches the base model and the live thinking level instead of holding every suffixed launch. A literal catalog id that ends in a level still wins, and other colon suffixes stay part of the id.
+
 - Telegram intake binds a private atomic cursor to the authenticated bot and omits offsets after 24 hours without observed updates, missing/invalid timestamps, or clock rollback. Bounded message/revision receipts prevent replay across epoch resets without treating a reused update ID as sufficient identity. Empty polls do not renew the epoch; legacy unscoped numeric cursors are preserved but not trusted. Windows uses a private owner ACL and an exclusive per-bot lease.
 
 - Add opt-in cron schedules with durable claims, explicit delivery, and read-only systemd observation. Stale ownership markers hold scheduled work for operator reconciliation.

@@ -7,7 +7,7 @@ import { calls, load, useConfig, type FakeOptions } from "./fake-pi.ts";
 
 const exact = { provider: "subscription", id: "exact" };
 
-for (const [name, options, status] of [
+for (const [name, options, status, thinking] of [
   ["exact subscribed model", { model: exact, subscription: true }, "matched"],
   ["literal colon-tagged id", { model: { ...exact, id: "exact:14b" }, selector: "subscription/exact:14b" }, "matched"],
   ["native case-insensitive exact identity", { model: exact, selector: "Subscription/EXACT" }, "matched"],
@@ -30,10 +30,23 @@ for (const [name, options, status] of [
   ["similar id on requested provider", { model: { ...exact, id: "exact-new" }, catalog: [exact] }, "mismatch"],
   ["unavailable subscription model", { model: exact, catalog: [] }, "unavailable"],
   [
-    "thinking suffix without a literal catalog id",
-    { model: exact, selector: "subscription/exact:high" },
-    "unavailable",
+    "thinking suffix at the same native level",
+    { model: exact, selector: "subscription/exact:high", thinking: "high" },
+    "matched",
+    { requested: "high", observed: "high" },
   ],
+  [
+    "thinking suffix at another native level",
+    { model: exact, selector: "subscription/exact:high", thinking: "low" },
+    "mismatch",
+    { requested: "high", observed: "low" },
+  ],
+  [
+    "literal catalog id ending in a thinking level",
+    { model: { ...exact, id: "exact:high" }, selector: "subscription/exact:high", thinking: "low" },
+    "matched",
+  ],
+  ["colon suffix that is not a thinking level", { model: exact, selector: "subscription/exact:turbo" }, "unavailable"],
   ["unknown native selection", {}, "unknown"],
 ] as const) {
   test(`native launch guard: ${name}`, async () => {
@@ -49,6 +62,7 @@ for (const [name, options, status] of [
       ...("model" in options ? { model: options.model } : {}),
       ...("subscription" in options ? { subscription: options.subscription } : {}),
       ...("catalog" in options ? { catalog: [...options.catalog] } : {}),
+      ...("thinking" in options ? { thinking: options.thinking } : {}),
     };
     const pi = await load(settings);
     try {
@@ -59,6 +73,7 @@ for (const [name, options, status] of [
         status,
         source: "native-extension",
       });
+      expect(readback?.thinking).toEqual(thinking);
       expect(Number.isFinite(Date.parse(readback?.checkedAt ?? ""))).toBe(true);
       expect(readback?.billing).toBe(
         settings.model ? (settings.subscription ? "subscription" : "non-subscription") : "unknown",
@@ -90,9 +105,9 @@ for (const [name, options, status] of [
 // Native host initialization on Windows can exceed the short subprocess deadline under CI load.
 const fixtureTimeoutMs = process.platform === "win32" ? 60_000 : 25_000;
 for (const boundary of ["session", "provider"] as const) {
-  for (const availability of ["available", "unavailable"] as const) {
-    const requests = availability === "available" ? "one request" : "zero requests";
-    const title = `real native ${boundary} sends ${requests} for an ${availability} exact model`;
+  for (const availability of ["available", "unavailable", "thinking", "thinking-mismatch"] as const) {
+    const requests = availability === "available" || availability === "thinking" ? "one request" : "zero requests";
+    const title = `real native ${boundary} sends ${requests} for a launch model that is ${availability}`;
     test(
       title,
       async () => {

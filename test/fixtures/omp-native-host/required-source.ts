@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
+import { THINKING_EFFORTS } from "@oh-my-pi/pi-catalog/effort";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
@@ -16,8 +17,10 @@ export async function requiredSourceRequest(
   role: "lane" | "dori" | undefined,
   boundary: "session" | "provider",
   launchModel?: string,
+  thinking?: "high" | "low",
 ): Promise<{ requests: number; errors: Array<{ event: string; error: string }> }> {
   const factory = await nativeExtensionFactory(entry);
+  const thinkingLevel = THINKING_EFFORTS.find((effort) => String(effort) === thinking);
   let requests = 0;
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -38,7 +41,8 @@ export async function requiredSourceRequest(
     api: "openai-completions",
     provider: "openai",
     baseUrl: `http://127.0.0.1:${server.port}/v1`,
-    reasoning: false,
+    reasoning: thinking !== undefined,
+    ...(thinking ? { thinking: { mode: "effort" as const, efforts: THINKING_EFFORTS } } : {}),
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 131_072,
@@ -79,6 +83,7 @@ export async function requiredSourceRequest(
       authStorage: auth,
       modelRegistry: registry,
       model,
+      ...(thinkingLevel ? { thinkingLevel } : {}),
       settings,
       bindProcessState: false,
       cacheWarming: false,

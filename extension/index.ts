@@ -29,6 +29,7 @@ import {
   type ModelReadback,
   type PaneState,
   exactModelIdentity,
+  thinkingSuffix,
   paneStatePath,
   readPaneState,
   writePaneState,
@@ -180,6 +181,7 @@ export interface DoriApi {
   ): void;
   sendUserMessage(content: string, options?: { deliverAs?: "aside" | "steer" }): Promise<void>;
   setModel?(model: PromptModel): Promise<boolean>;
+  getThinkingLevel?(): string | undefined;
   getActiveTools(): string[];
   setActiveTools(toolNames: string[]): Promise<void>;
 }
@@ -315,17 +317,29 @@ export default async function ompDori(pi: DoriApi): Promise<void> {
       return { ...base, status: "unknown", billing: "unknown" };
     if (!requested) return { ...base, status: "unrequested", billing: "unknown" };
     if (!ctx.modelRegistry) return { ...base, status: "unknown", billing: "unknown" };
-    const key = `${requested.provider}/${requested.id}`.toLowerCase();
     try {
       const billing = ctx.modelRegistry.isUsingSubscription(model) ? "subscription" : "non-subscription";
       const available = ctx.modelRegistry.getAvailableForProviders(new Set([requested.provider.toLowerCase()]));
-      const matches = available.filter((candidate) => `${candidate.provider}/${candidate.id}`.toLowerCase() === key);
+      const find = (id: string) =>
+        available.filter(
+          (candidate) =>
+            `${candidate.provider}/${candidate.id}`.toLowerCase() === `${requested.provider}/${id}`.toLowerCase(),
+        );
+      // As in OMP's selector parser, a literal catalog id wins; otherwise a trailing level selects the base model.
+      let matches = find(requested.id);
+      const suffix = matches.length ? null : thinkingSuffix(requested.id);
+      const id = suffix?.base ?? requested.id;
+      if (suffix) matches = find(id);
+      const thinking = suffix ? { requested: suffix.level, observed: pi.getThinkingLevel?.() ?? null } : undefined;
+      const proof = thinking ? { ...base, thinking } : base;
       const selected =
-        matches.find((candidate) => candidate.id === requested.id) ?? (matches.length === 1 ? matches[0] : undefined);
-      if (!selected) return { ...base, status: matches.length ? "unknown" : "unavailable", billing };
+        matches.find((candidate) => candidate.id === id) ?? (matches.length === 1 ? matches[0] : undefined);
+      if (!selected) return { ...proof, status: matches.length ? "unknown" : "unavailable", billing };
+      const level = thinking?.observed === thinking?.requested;
       return {
-        ...base,
-        status: observed.provider === selected.provider && observed.id === selected.id ? "matched" : "mismatch",
+        ...proof,
+        status:
+          observed.provider === selected.provider && observed.id === selected.id && level ? "matched" : "mismatch",
         billing,
       };
     } catch {

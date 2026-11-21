@@ -131,6 +131,9 @@ export const deliverModelBrief = async (
     throw error;
   }
   const proof = state?.modelReadback;
+  // A thinking-suffixed selection reads back as its base model plus the live native level.
+  const level = proof?.thinking;
+  const selected = level ? model.slice(0, -level.requested.length - 1) : model;
   if (
     state?.role !== "lane" ||
     state.approvalPending ||
@@ -142,7 +145,8 @@ export const deliverModelBrief = async (
     proof?.source !== "native-extension" ||
     proof.status !== "matched" ||
     `${proof.requested?.provider}/${proof.requested?.id}` !== model ||
-    `${proof.observed?.provider}/${proof.observed?.id}`.toLowerCase() !== model.toLowerCase() ||
+    `${proof.observed?.provider}/${proof.observed?.id}`.toLowerCase() !== selected.toLowerCase() ||
+    (level !== undefined && (level.observed !== level.requested || !model.endsWith(`:${level.requested}`))) ||
     !(Date.parse(proof.checkedAt) >= launchedAt)
   )
     return `native model ${proof?.status ?? "unknown"}; brief not sent; no automatic substitution`;

@@ -25,6 +25,7 @@ export type FakeOptions = {
   model?: DoriContext["model"];
   catalog?: NonNullable<DoriContext["model"]>[];
   subscription?: boolean;
+  thinking?: string;
 };
 
 export type FakePi = {
@@ -119,6 +120,7 @@ export const fakePi = (options: FakeOptions): FakePi => {
         if (flag.default !== undefined && !flags.has(name)) flags.set(name, flag.default);
       },
       getFlag: (name) => flags.get(name),
+      getThinkingLevel: () => options.thinking,
       registerCommand: (name, command) => void fake.commands.set(name, command),
       registerTool: (tool) => void fake.tools.set(tool.name, tool as Tool),
       on: (event: string, handler: (event: never, ctx: DoriContext) => unknown) => {
